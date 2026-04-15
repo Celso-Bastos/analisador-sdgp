@@ -1,8 +1,6 @@
 // src/controllers/ocrController.js
 const Tesseract = require("tesseract.js");
-const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = false;
+const pdfjsLib = require("pdfjs-dist");
 
 async function extrairTexto(req, res) {
   const { base64, tipo } = req.body;
