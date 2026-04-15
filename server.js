@@ -15,19 +15,8 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 app.use(helmet({ contentSecurityPolicy: false }));
 
 // ── CORS ──────────────────────────────────────
-const origensPermitidas = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : [];
-
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (origensPermitidas.includes("*")) return callback(null, true);
-    if (origensPermitidas.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origem não permitida — ${origin}`));
-  },
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"],
+  origin: true
 }));
 
 // ── RATE LIMITING ─────────────────────────────
