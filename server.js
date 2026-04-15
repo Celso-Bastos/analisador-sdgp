@@ -76,6 +76,3 @@ app.listen(PORT, () => {
   console.log(`   Health   : http://localhost:${PORT}/api/health\n`);
 });
 
-server.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
-});
