@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SDGP — Analisador de Regularização</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --azul: #0F4C81; --azul-claro: #E8F1FA; --azul-medio: #1A6DB5;
+      --verde: #1A5C2A; --verde-claro: #E6F4EA;
+      --amarelo: #7A4F00; --amarelo-claro: #FFF3DC;
+      --vermelho: #8B1A1A; --vermelho-claro: #FDEAEA;
+      --cinza-100: #F7F6F3; --cinza-200: #EEECE8; --cinza-400: #B0ADA6; --cinza-700: #4A4845;
+      --preto: #1A1917; --branco: #FDFCFA;
+      --fonte-titulo: 'Syne', sans-serif; --fonte-corpo: 'DM Sans', sans-serif;
+    }
+    body { font-family: var(--fonte-corpo); background: var(--cinza-100); color: var(--preto); min-height: 100vh; }
+
+    .header { background: var(--azul); padding: 1.25rem 2rem; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 100; }
+    .header-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .header h1 { font-family: var(--fonte-titulo); font-size: 17px; font-weight: 600; color: #fff; }
+    .header p { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 1px; }
+
+    .container { max-width: 860px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+    .secao { margin-bottom: 1.25rem; }
+    .card { background: var(--branco); border: 1px solid var(--cinza-200); border-radius: 14px; padding: 1.5rem; }
+    .secao-titulo { font-family: var(--fonte-titulo); font-size: 11px; font-weight: 600; color: var(--cinza-400); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; }
+    .grupo-titulo {
+      font-family: var(--fonte-titulo); font-size: 10px; font-weight: 700;
+      color: var(--azul-medio); text-transform: uppercase; letter-spacing: 0.08em;
+      margin: 18px 0 10px; padding-top: 14px;
+      border-top: 1px dashed var(--cinza-200);
+    }
+    .grupo-titulo:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media(max-width: 560px) { .row-2 { grid-template-columns: 1fr; } }
+    .campo { display: flex; flex-direction: column; gap: 5px; }
+    .campo label { font-size: 12px; font-weight: 500; color: var(--cinza-700); }
+    .campo input { font-family: var(--fonte-corpo); font-size: 14px; padding: 9px 12px; border: 1px solid var(--cinza-200); border-radius: 8px; background: var(--cinza-100); color: var(--preto); outline: none; transition: border-color 0.15s; }
+    .campo input:focus { border-color: var(--azul-medio); box-shadow: 0 0 0 3px rgba(26,109,181,0.12); background: #fff; }
+
+    .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media(max-width: 560px) { .doc-grid { grid-template-columns: 1fr; } }
+
+    .doc-item { border: 1.5px dashed var(--cinza-200); border-radius: 10px; padding: 12px; background: var(--cinza-100); display: flex; flex-direction: column; gap: 6px; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+    .doc-item:hover { border-color: var(--azul-medio); background: var(--azul-claro); }
+    .doc-item.carregado { border-color: var(--verde); border-style: solid; background: var(--verde-claro); }
+    .doc-item.processando { border-color: var(--azul-medio); border-style: solid; background: var(--azul-claro); }
+    .doc-item.erro { border-color: var(--vermelho); border-style: solid; background: var(--vermelho-claro); }
+    .doc-item input[type=file] { display: none; }
+
+    .doc-nome { font-family: var(--fonte-titulo); font-size: 13px; font-weight: 600; color: var(--preto); }
+    .doc-desc { font-size: 11px; color: var(--cinza-400); line-height: 1.4; }
+    .doc-status { font-size: 11px; font-weight: 500; margin-top: 2px; min-height: 16px; color: var(--cinza-400); }
+    .doc-item.carregado .doc-status { color: var(--verde); }
+    .doc-item.processando .doc-status { color: var(--azul-medio); }
+    .doc-item.erro .doc-status { color: var(--vermelho); }
+    .doc-upload-hint { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--azul-medio); margin-top: 4px; }
+    .doc-item.carregado .doc-upload-hint, .doc-item.processando .doc-upload-hint { display: none; }
+    .doc-spinner { display: none; width: 14px; height: 14px; border: 2px solid var(--cinza-200); border-top-color: var(--azul-medio); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .doc-item.processando .doc-spinner { display: inline-block; }
+
+    .btn-analisar { width: 100%; padding: 14px; font-family: var(--fonte-titulo); font-size: 15px; font-weight: 600; border: none; border-radius: 10px; background: var(--azul); color: #fff; cursor: pointer; margin-top: 0.75rem; transition: background 0.15s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-analisar:hover:not(:disabled) { background: var(--azul-medio); }
+    .btn-analisar:active:not(:disabled) { transform: scale(0.99); }
+    .btn-analisar:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-nova { width: 100%; padding: 12px; font-family: var(--fonte-titulo); font-size: 14px; font-weight: 600; border: 1px solid var(--cinza-200); border-radius: 10px; background: var(--branco); color: var(--cinza-700); cursor: pointer; margin-top: 0.5rem; }
+    .btn-nova:hover { background: var(--cinza-100); }
+
+    .loading-area { display: none; align-items: center; gap: 12px; padding: 1rem 0; }
+    .loading-area.visivel { display: flex; }
+    .spinner-grande { width: 22px; height: 22px; border: 2.5px solid var(--cinza-200); border-top-color: var(--azul); border-radius: 50%; animation: spin 0.75s linear infinite; }
+    .loading-txt { font-size: 14px; color: var(--cinza-700); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .erro-box { display: none; background: var(--vermelho-claro); border: 1px solid rgba(139,26,26,0.2); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--vermelho); margin-top: 10px; }
+    .erro-box.visivel { display: block; }
+
+    .resultado { display: none; }
+    .resultado.visivel { display: block; }
+
+    .score-wrap { display: flex; align-items: center; gap: 20px; margin-bottom: 1rem; }
+    .score-circulo { width: 88px; height: 88px; border-radius: 50%; border: 4px solid; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; font-family: var(--fonte-titulo); }
+    .score-num { font-size: 26px; font-weight: 700; line-height: 1; }
+    .score-pct { font-size: 11px; font-weight: 500; opacity: 0.8; }
+    .score-info-titulo { font-family: var(--fonte-titulo); font-size: 16px; font-weight: 600; }
+    .score-info-sub { font-size: 13px; color: var(--cinza-700); margin-top: 5px; line-height: 1.5; }
+    .barra-wrap { height: 7px; background: var(--cinza-200); border-radius: 999px; margin: 1rem 0 0.25rem; overflow: hidden; }
+    .barra { height: 100%; border-radius: 999px; width: 0%; transition: width 1.2s cubic-bezier(.4,0,.2,1); }
+
+    .diretivas { display: flex; flex-direction: column; gap: 8px; }
+    .diretiva { border-radius: 9px; padding: 11px 14px; border-left: 3px solid; }
+    .diretiva.ok { background: var(--verde-claro); border-color: var(--verde); }
+    .diretiva.atencao { background: var(--amarelo-claro); border-color: var(--amarelo); }
+    .diretiva.critico { background: var(--vermelho-claro); border-color: var(--vermelho); }
+    .dir-tag { font-family: var(--fonte-titulo); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+    .diretiva.ok .dir-tag { color: var(--verde); }
+    .diretiva.atencao .dir-tag { color: var(--amarelo); }
+    .diretiva.critico .dir-tag { color: var(--vermelho); }
+    .dir-texto { font-size: 13px; line-height: 1.6; }
+
+    .progresso-geral { height: 3px; background: var(--cinza-200); border-radius: 2px; margin-bottom: 1.25rem; overflow: hidden; }
+    .progresso-barra { height: 100%; background: var(--azul-medio); border-radius: 2px; transition: width 0.4s ease; width: 0%; }
+    .contador { font-size: 12px; color: var(--cinza-400); margin-top: 10px; text-align: right; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-icon">🐟</div>
+  <div>
+    <h1>Analisador SDGP</h1>
+    <p>Seguro Desemprego do Pescador Artesanal</p>
+  </div>
+</header>
+
+<div class="container">
+  <div class="progresso-geral"><div class="progresso-barra" id="progresso-barra"></div></div>
+
+  <div id="pagina-form">
+    <div class="secao">
+      <div class="card">
+        <div class="secao-titulo">Dados do cliente</div>
+        <div class="row-2">
+          <div class="campo"><label>Nome completo</label><input type="text" id="nome" placeholder="Ex: João da Silva" autocomplete="off" /></div>
+          <div class="campo"><label>CPF</label><input type="text" id="cpf" placeholder="000.000.000-00" maxlength="14" autocomplete="off" /></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="secao">
+      <div class="card">
+        <div class="secao-titulo">Documentos — clique para fazer upload (PDF ou imagem)</div>
+
+        <div class="grupo-titulo">Identificação e Cadastro</div>
+        <div class="doc-grid" id="grid-identificacao"></div>
+
+        <div class="grupo-titulo">Atividade Pesqueira</div>
+        <div class="doc-grid" id="grid-pesca"></div>
+
+        <div class="grupo-titulo">REAP — Relatório Anual de Exercício da Atividade Pesqueira</div>
+        <div class="doc-grid" id="grid-reap"></div>
+
+        <div class="grupo-titulo">Previdência e Financeiro</div>
+        <div class="doc-grid" id="grid-previdencia"></div>
+
+        <div class="contador" id="contador">0 de 11 documentos enviados</div>
+      </div>
+    </div>
+
+    <button class="btn-analisar" id="btn-analisar" onclick="analisar()">Analisar documentos</button>
+    <div class="erro-box" id="erro-box"></div>
+    <div class="loading-area" id="loading-area">
+      <div class="spinner-grande"></div>
+      <span class="loading-txt" id="loading-txt">Processando...</span>
+    </div>
+  </div>
+
+  <div class="resultado" id="resultado">
+    <div class="secao">
+      <div class="card">
+        <div class="secao-titulo">Score de regularização</div>
+        <div class="score-wrap">
+          <div class="score-circulo" id="score-circulo">
+            <span class="score-num" id="score-num">—</span>
+            <span class="score-pct">%</span>
+          </div>
+          <div>
+            <div class="score-info-titulo" id="score-titulo"></div>
+            <div class="score-info-sub" id="score-sub"></div>
+          </div>
+        </div>
+        <div class="barra-wrap"><div class="barra" id="barra"></div></div>
+      </div>
+    </div>
+    <div class="secao">
+      <div class="card">
+        <div class="secao-titulo">Direcionamentos e pendências</div>
+        <div class="diretivas" id="diretivas"></div>
+      </div>
+    </div>
+    <button class="btn-nova" onclick="novaAnalise()">← Nova análise</button>
+  </div>
+</div>
+
+<script>
+const GRUPOS = {
+  "grid-identificacao": [
+    { id: "rg",        nome: "RG / CIN",                    desc: "Documento de identidade" },
+    { id: "cadunico",  nome: "CadÚnico",                    desc: "Cadastro Único para Programas Sociais" },
+    { id: "receita",   nome: "Dados da Receita Federal",    desc: "Situação cadastral do CPF" },
+    { id: "residencia",nome: "Declaração de Residência",    desc: "Mínimo 1 ano — conta de luz, água ou declaração" },
+  ],
+  "grid-pesca": [
+    { id: "rgp",         nome: "RGP",          desc: "Registro Geral da Atividade Pesqueira" },
+    { id: "certificado", nome: "Certificado",   desc: "Certificado de Regularidade do Pescador" },
+  ],
+  "grid-reap": [
+    { id: "reap2124", nome: "REAP 2021–2024", desc: "Relatório simplificado dos anos 2021 a 2024" },
+    { id: "reap25",   nome: "REAP 2025",      desc: "Relatório 2025 — obrigatório para concessão em 2026" },
+  ],
+  "grid-previdencia": [
+    { id: "cnis",     nome: "CNIS",                     desc: "Cadastro Nacional de Informações Sociais" },
+    { id: "dae",      nome: "DAE Competência Atual",    desc: "Documento de arrecadação — competência vigente" },
+    { id: "contrato", nome: "Contrato",                  desc: "Contrato de trabalho ou prestação de serviços (se houver)" },
+  ],
+};
+
+const TODOS_DOCS = Object.values(GRUPOS).flat();
+const textos = {};
+
+function renderGrupos() {
+  for (const [gridId, docs] of Object.entries(GRUPOS)) {
+    document.getElementById(gridId).innerHTML = docs.map(d => `
+      <div class="doc-item" id="item-${d.id}" onclick="document.getElementById('file-${d.id}').click()">
+        <input type="file" id="file-${d.id}" accept=".pdf,image/*" onchange="processarArquivo('${d.id}', this)" />
+        <div class="doc-nome">${d.nome}</div>
+        <div class="doc-desc">${d.desc}</div>
+        <div class="doc-upload-hint">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Clique para enviar
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="doc-spinner"></div>
+          <div class="doc-status" id="status-${d.id}">Aguardando arquivo</div>
+        </div>
+      </div>
+    `).join("");
+  }
+}
+
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function processarArquivo(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  setDocEstado(id, "processando", "Enviando para o servidor...");
+  try {
+    const base64 = await toBase64(file);
+    const res = await fetch("/api/ocr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base64, tipo: file.type }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao extrair texto.");
+    textos[id] = data.texto;
+    setDocEstado(id, "carregado", `✓ ${file.name}`);
+    atualizarContador();
+  } catch (err) {
+    setDocEstado(id, "erro", err.message);
+    delete textos[id];
+    atualizarContador();
+  }
+}
+
+function setDocEstado(id, estado, msg) {
+  document.getElementById("item-" + id).className = "doc-item " + estado;
+  document.getElementById("status-" + id).textContent = msg;
+}
+
+function atualizarContador() {
+  const n = Object.keys(textos).length;
+  const total = TODOS_DOCS.length;
+  document.getElementById("contador").textContent = `${n} de ${total} documentos enviados`;
+  document.getElementById("progresso-barra").style.width = Math.round((n / total) * 60) + "%";
+}
+
+document.getElementById("cpf").addEventListener("input", function () {
+  let v = this.value.replace(/\D/g, "");
+  if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, "$1.$2.$3-$4");
+  else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, "$1.$2.$3");
+  else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, "$1.$2");
+  this.value = v;
+});
+
+function setErro(msg) {
+  const el = document.getElementById("erro-box");
+  msg ? (el.textContent = msg, el.classList.add("visivel")) : el.classList.remove("visivel");
+}
+
+function setLoading(v, msg) {
+  document.getElementById("loading-area").classList.toggle("visivel", v);
+  document.getElementById("btn-analisar").disabled = v;
+  if (msg) document.getElementById("loading-txt").textContent = msg;
+}
+
+async function analisar() {
+  setErro("");
+  const nome = document.getElementById("nome").value.trim();
+  const cpf = document.getElementById("cpf").value.trim();
+  if (!nome || !cpf) { setErro("Preencha o nome e CPF antes de analisar."); return; }
+  if (Object.keys(textos).length === 0) { setErro("Faça upload de pelo menos um documento."); return; }
+
+  const documentos = {};
+  for (const d of TODOS_DOCS) documentos[d.id] = textos[d.id] || "";
+
+  setLoading(true, "Extraindo dados dos documentos...");
+  document.getElementById("progresso-barra").style.width = "75%";
+
+  try {
+    const response = await fetch("/api/analisar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome, cpf, documentos }),
+    });
+    setLoading(true, "Aplicando checklist completo...");
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.erros?.[0] || "Erro ao processar.");
+    document.getElementById("progresso-barra").style.width = "100%";
+    renderResultado(data.resultado);
+  } catch (err) {
+    setErro("Erro: " + err.message);
+    document.getElementById("progresso-barra").style.width = "60%";
+  } finally {
+    setLoading(false);
+  }
+}
+
+function renderResultado(r) {
+  const score = Math.max(0, Math.min(100, Math.round(r.score)));
+  let cor, titulo;
+  if (score >= 80) { cor = { borda: "#1A5C2A", texto: "#1A5C2A", barra: "#2E8B47" }; titulo = "Alta probabilidade de regularização"; }
+  else if (score >= 50) { cor = { borda: "#7A4F00", texto: "#7A4F00", barra: "#C4830A" }; titulo = "Regularização parcial — pendências importantes"; }
+  else { cor = { borda: "#8B1A1A", texto: "#8B1A1A", barra: "#C0392B" }; titulo = "Situação crítica — regularização improvável"; }
+
+  document.getElementById("score-circulo").style.borderColor = cor.borda;
+  document.getElementById("score-num").style.color = cor.texto;
+  document.getElementById("score-num").textContent = score;
+  document.getElementById("score-titulo").textContent = titulo;
+  document.getElementById("score-sub").textContent = r.resumo || "";
+
+  const barra = document.getElementById("barra");
+  barra.style.background = cor.barra;
+  setTimeout(() => { barra.style.width = score + "%"; }, 100);
+
+  const tagMap = { ok: "Conforme", atencao: "Atenção", critico: "Pendência crítica" };
+  document.getElementById("diretivas").innerHTML = (r.diretivas || []).map(d => `
+    <div class="diretiva ${d.tipo}">
+      <div class="dir-tag">${tagMap[d.tipo] || d.tipo} — ${d.titulo}</div>
+      <div class="dir-texto">${d.texto}</div>
+    </div>
+  `).join("");
+
+  document.getElementById("pagina-form").style.display = "none";
+  document.getElementById("resultado").classList.add("visivel");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function novaAnalise() {
+  for (const k of Object.keys(textos)) delete textos[k];
+  for (const d of TODOS_DOCS) {
+    setDocEstado(d.id, "", "Aguardando arquivo");
+    document.getElementById("file-" + d.id).value = "";
+  }
+  document.getElementById("nome").value = "";
+  document.getElementById("cpf").value = "";
+  document.getElementById("resultado").classList.remove("visivel");
+  document.getElementById("pagina-form").style.display = "block";
+  document.getElementById("progresso-barra").style.width = "0%";
+  document.getElementById("contador").textContent = `0 de ${TODOS_DOCS.length} documentos enviados`;
+  setErro("");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+renderGrupos();
+</script>
+</body>
+</html>
