@@ -1,6 +1,10 @@
 // src/controllers/ocrController.js
 const Tesseract = require("tesseract.js");
-const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
+
+// pdfjs-dist v5 — importação correta
+const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.mjs"); // ESM apenas na v5
+// Desabilita worker (ambiente Node.js sem worker threads para o pdfjs)
+pdfjsLib.GlobalWorkerOptions.workerSrc = "";
 
 async function extrairTexto(req, res) {
   const { base64, tipo } = req.body;
@@ -37,38 +41,40 @@ async function extrairTexto(req, res) {
   }
 }
 
-// ── PDF ───────────────────────────────────────
 async function extrairTextoPDF(buffer) {
   const uint8 = new Uint8Array(buffer);
-  const pdf = await pdfjsLib.getDocument({
+  const loadingTask = pdfjsLib.getDocument({
     data: uint8,
     useWorkerFetch: false,
     isEvalSupported: false,
     useSystemFonts: true,
-  }).promise;
+    // v5: desabilita worker explicitamente
+    disableWorker: true,
+  });
 
+  const pdf = await loadingTask.promise;
   let texto = "";
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     texto += content.items.map((item) => item.str).join(" ") + "\n";
   }
 
-  // PDF escaneado — renderiza em canvas e aplica OCR
+  // PDF escaneado — renderiza e aplica OCR
   if (texto.trim().length < 20) {
-    console.log("[OCR] PDF escaneado — renderizando páginas para OCR...");
+    console.log("[OCR] PDF escaneado — aplicando OCR nas páginas...");
     texto = await ocrarPaginasPDF(pdf);
   }
 
   return texto;
 }
 
-// Renderiza PDF em canvas Node.js e aplica Tesseract
 async function ocrarPaginasPDF(pdf) {
   const { createCanvas } = require("canvas");
   let textoTotal = "";
-
   const totalPaginas = Math.min(pdf.numPages, 3);
+
   for (let i = 1; i <= totalPaginas; i++) {
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale: 2.0 });
@@ -87,7 +93,6 @@ async function ocrarPaginasPDF(pdf) {
   return textoTotal;
 }
 
-// ── IMAGEM ────────────────────────────────────
 async function extrairTextoImagem(buffer) {
   const { data: { text } } = await Tesseract.recognize(buffer, "por", {
     logger: () => {},
