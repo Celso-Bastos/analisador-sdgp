@@ -456,3 +456,4 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
 }
 
 module.exports = { analisarDocumentos };
+
