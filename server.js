@@ -8,6 +8,7 @@ const rateLimit = require("express-rate-limit");
 const apiRoutes = require("./src/routes/api");
 
 const app = express();
+app.set("trust proxy", 1); // ← adicionar logo após criar o app
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 

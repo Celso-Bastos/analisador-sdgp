@@ -25,13 +25,12 @@ const PROVEDORES = {
   openrouter: {
     url: "https://openrouter.ai/api/v1/chat/completions",
     getKey: () => process.env.OPENROUTER_API_KEY,
-    // Modelos free do OpenRouter (128K–164K context, zero custo)
     modeloPrincipal:    "meta-llama/llama-3.3-70b-instruct:free",
-    modeloFallback:     "deepseek/deepseek-r1:free",
-    modeloConsolidador: "deepseek/deepseek-r1:free",
+    modeloFallback:     "mistralai/mistral-7b-instruct:free",  // ← era deepseek
+    modeloConsolidador: "mistralai/mistral-7b-instruct:free",  // ← era deepseek
     nome: "OpenRouter",
     headers: {
-      "HTTP-Referer": process.env.APP_URL || "https://sdgp.app",
+      "HTTP-Referer": process.env.APP_URL || "http://localhost:3000", // ← sem domínio falso
       "X-Title": "Analisador SDGP",
     },
   },
