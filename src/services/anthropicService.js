@@ -1,16 +1,44 @@
 // src/services/anthropicService.js
-// Pipeline de 2 modelos paralelos:
-//   Modelo A → Perito Documental (cruzamento interno entre documentos)
-//   Modelo B → Perito Jurídico   (conformidade com a base legal)
-//   Consolidador → mescla os dois resultados em score + diretivas finais
+//
+// Pipeline de 3 chamadas distribuídas entre provedores:
+//
+//  CHAMADA A — Perito Documental   → OpenRouter (Llama 3.3 70B :free, 128K ctx)
+//  CHAMADA B — Perito Jurídico     → Groq       (Llama 3.3 70B,    128K ctx)
+//  CHAMADA C — Consolidador        → OpenRouter (DeepSeek R1 :free, 164K ctx)
+//
+// Por que essa distribuição:
+//  - Groq e OpenRouter têm rate limits INDEPENDENTES entre si
+//  - A + B rodam em paralelo (Promise.all) → sem overhead de tempo
+//  - C (consolidador) recebe JSONs pequenos → rápido e leve
+//  - Se OpenRouter falhar no modelo principal, há fallback automático
+// ─────────────────────────────────────────────────────────────────────────────
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODELO_ANALISE = "llama-3.3-70b-versatile";
-const MODELO_CONSOLIDADOR = "llama-3.3-70b-versatile"; // pode trocar por modelo menor
+// ── CONFIGURAÇÕES DOS PROVEDORES ─────────────────────────────────────────────
 
-// ─────────────────────────────────────────────
-// LABELS
-// ─────────────────────────────────────────────
+const PROVEDORES = {
+  groq: {
+    url: "https://api.groq.com/openai/v1/chat/completions",
+    getKey: () => process.env.GROQ_API_KEY,
+    modelo: "llama-3.3-70b-versatile",
+    nome: "Groq",
+  },
+  openrouter: {
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    getKey: () => process.env.OPENROUTER_API_KEY,
+    // Modelos free do OpenRouter (128K–164K context, zero custo)
+    modeloPrincipal:    "meta-llama/llama-3.3-70b-instruct:free",
+    modeloFallback:     "deepseek/deepseek-r1:free",
+    modeloConsolidador: "deepseek/deepseek-r1:free",
+    nome: "OpenRouter",
+    headers: {
+      "HTTP-Referer": process.env.APP_URL || "https://sdgp.app",
+      "X-Title": "Analisador SDGP",
+    },
+  },
+};
+
+// ── LABELS DOS DOCUMENTOS ────────────────────────────────────────────────────
+
 const LABELS = {
   rg:          "RG / CIN",
   rgp:         "RGP (Registro Geral da Atividade Pesqueira)",
@@ -27,96 +55,128 @@ const LABELS = {
 
 function montarDocsTexto(documentos) {
   return Object.entries(LABELS)
-    .map(([k, l]) => `[${l}]:\n${documentos[k]?.trim().slice(0, 2000) || "NÃO INFORMADO"}`)
+    .map(([k, l]) => `[${l}]:\n${documentos[k]?.trim().slice(0, 3000) || "NÃO INFORMADO"}`)
     .join("\n\n");
 }
 
-// ─────────────────────────────────────────────
-// PROMPT A — PERITO DOCUMENTAL
-// Objetivo: cruzar os documentos entre si e detectar divergências internas
-// ─────────────────────────────────────────────
-const SYSTEM_PROMPT_A = `
-Você é um PERITO DOCUMENTAL especializado na conferência cruzada de documentos do Seguro Defeso do Pescador Artesanal (SDGP).
+// ── CHAMADA GENÉRICA (formato OpenAI-compatível) ──────────────────────────────
 
-SEU ÚNICO PAPEL:
-Comparar os documentos enviados ENTRE SI e identificar divergências, ausências e inconsistências internas.
+async function chamar({ provedor, modelo, systemPrompt, userMessage, maxTokens = 2000, label }) {
+  const cfg = PROVEDORES[provedor];
+  const key = cfg.getKey();
+
+  if (!key) {
+    throw new Error(`[${label}] Chave ausente para "${provedor}". Verifique o .env.`);
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${key}`,
+    ...(cfg.headers || {}),
+  };
+
+  const body = JSON.stringify({
+    model: modelo,
+    temperature: 0.1,
+    max_tokens: maxTokens,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user",   content: userMessage   },
+    ],
+  });
+
+  const response = await fetch(cfg.url, { method: "POST", headers, body });
+
+  if (!response.ok) {
+    const erro = await response.json().catch(() => ({}));
+    const msg  = erro?.error?.message || `HTTP ${response.status}`;
+    throw new Error(`[${label}][${cfg.nome}] ${msg}`);
+  }
+
+  const data = await response.json();
+  const raw  = (data.choices?.[0]?.message?.content || "").replace(/```json|```/g, "").trim();
+
+  // DeepSeek R1 pode incluir bloco <think>...</think> antes do JSON — remover
+  const semThink = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  try {
+    return JSON.parse(semThink);
+  } catch {
+    throw new Error(`[${label}] JSON inválido: ${semThink.slice(0, 300)}`);
+  }
+}
+
+// Wrapper com fallback automático entre modelos do OpenRouter
+async function chamarOpenRouter({ modeloPrincipal, modeloFallback, ...resto }) {
+  try {
+    return await chamar({ provedor: "openrouter", modelo: modeloPrincipal, ...resto });
+  } catch (err) {
+    if (modeloFallback) {
+      console.warn(`[${resto.label}] Fallback ativado (${modeloPrincipal} → ${modeloFallback}): ${err.message}`);
+      return await chamar({ provedor: "openrouter", modelo: modeloFallback, ...resto });
+    }
+    throw err;
+  }
+}
+
+// ── PROMPT A — PERITO DOCUMENTAL (OpenRouter) ────────────────────────────────
+
+const SYSTEM_A = `
+Você é um PERITO DOCUMENTAL especializado em conferência cruzada de documentos do Seguro Defeso do Pescador Artesanal (SDGP).
+
+SEU ÚNICO PAPEL: comparar os documentos enviados ENTRE SI.
 Você NÃO analisa legislação. Você NÃO avalia carências. Você compara dados.
 
-━━━━━━━━━━━━━━━━━━━
-DOCUMENTOS QUE VOCÊ RECEBE
-━━━━━━━━━━━━━━━━━━━
-RG/CIN · CadÚnico · Receita Federal · Comprovante de Residência
-RGP · Certificado de Regularidade · REAP 2021–2024 · REAP 2025
-CNIS · DAE Competência Atual · Contrato
+━━━ CHECKLIST DE CRUZAMENTOS ━━━
 
-━━━━━━━━━━━━━━━━━━━
-CHECKLIST OBRIGATÓRIO DE CRUZAMENTOS
-━━━━━━━━━━━━━━━━━━━
+[C1] PRESENÇA DE DOCUMENTOS
+Liste quais dos 11 documentos estão presentes (conteúdo real) e quais estão ausentes
+(marcados como "NÃO INFORMADO" ou com texto menor que 10 caracteres).
 
-[C1] PRESENÇA DE DOCUMENTOS:
-Verificar quais dos 11 documentos estão presentes (com conteúdo real) e quais estão ausentes.
-→ Ausente = "NÃO INFORMADO" ou texto com menos de 10 caracteres
-→ Liste EXATAMENTE quais estão ausentes
+[C2] IDENTIDADE — CRUZAMENTO TOTAL
+Compare entre TODOS os documentos que contenham esses campos:
+nome completo, data de nascimento, nome da mãe, nome do pai, naturalidade, CPF, número do RGP.
+→ Qualquer diferença deve ser reportada com os valores EXATOS encontrados.
+  Exemplo: "Nome no RG: João Silva / Nome no CadÚnico: João da Silva — divergência no sobrenome"
 
-[C2] IDENTIDADE — CRUZAMENTO TOTAL:
-Compare entre TODOS os documentos que contenham esses dados:
-- Nome completo (variações de grafia, abreviações, inversões)
-- Data de nascimento
-- Nome da mãe
-- Nome do pai
-- Naturalidade / município de nascimento
-- CPF
-- Número do RGP
-→ Qualquer diferença, por menor que seja, DEVE ser reportada com os valores exatos encontrados
-
-[C3] ENDEREÇO — BASE: CadÚnico:
-O endereço do CadÚnico é a referência.
-Compare com: Receita Federal · RGP · CNIS · REAP 2021–2024 · REAP 2025
+[C3] ENDEREÇO — BASE: CadÚnico
+Compare o endereço do CadÚnico com: Receita Federal, RGP, CNIS, REAP 2021–2024, REAP 2025.
 → Divergência de município = CRÍTICA
-→ Divergência de bairro/logradouro = ATENÇÃO
-→ Ausência de endereço em documento que deveria conter = ATENÇÃO
+→ Divergência de bairro ou logradouro = ATENÇÃO
+→ Endereço ausente em documento que deveria conter = ATENÇÃO
 
-[C4] DATAS E VALIDADES:
-- Data de emissão do RGP (verificar se existe e se é coerente)
-- Data de emissão do Certificado de Regularidade (verificar vencimento)
-- Período coberto pelo REAP 2021–2024 (todos os anos 2021, 2022, 2023 e 2024 devem constar)
-- REAP 2025 — verificar se o ano de 2025 está declarado
-- DAE — verificar se a competência do DAE é recente (máximo 3 meses de defasagem)
-- Contrato (se presente): verificar datas de vigência
+[C4] DATAS E VALIDADES
+- Certificado de Regularidade: há data de vencimento? Está vencido?
+- REAP 2021–2024: os 4 anos (2021, 2022, 2023, 2024) estão todos declarados?
+- REAP 2025: o ano 2025 está declarado?
+- DAE: a competência é recente? (máximo 3 meses de defasagem em relação à data de hoje)
+- Contrato (se presente): datas de vigência são coerentes?
 
-[C5] CONSISTÊNCIA DO REAP vs. OUTROS DOCUMENTOS:
-Compare as informações declaradas no REAP com os outros documentos:
+[C5] REAP vs. OUTROS DOCUMENTOS
+Compare o conteúdo do REAP com os demais documentos:
 - Município de pesca declarado no REAP vs. município de residência no CadÚnico (coerência geográfica)
-- Espécies e petrechos declarados no REAP vs. categoria no RGP
-- Dados do pescador no REAP (nome, CPF, RGP) vs. demais documentos
+- Espécies e petrechos declarados no REAP vs. categoria registrada no RGP
+- Nome, CPF e número do RGP no REAP vs. demais documentos
 
-[C6] CNIS vs. DAE vs. CONTRATO:
-- Verificar se há contribuições previdenciárias no CNIS
-- Identificar a competência mais recente do CNIS
-- Comparar com a competência do DAE enviado
-- Se houver contrato: verificar se existe vínculo CLT ativo — isso é impeditivo para o seguro defeso
-→ Registrar o número de contribuições identificadas
+[C6] CNIS vs. DAE vs. CONTRATO
+- Identificar competência mais recente das contribuições no CNIS
+- Comparar com a competência do DAE enviado (estão próximas?)
+- Se houver contrato: há vínculo CLT ativo? → Marcar como CRÍTICO IMPEDITIVO
 
-[C7] PADRÕES SUSPEITOS:
-- Datas idênticas em documentos diferentes que normalmente não coincidiriam
-- Informações que parecem copiadas entre documentos
-- Endereços que mudam de documento para documento
-- Nome do pescador com grafias diferentes em mais de 2 documentos
+[C7] PADRÕES SUSPEITOS
+- Nome com grafias diferentes em mais de 2 documentos
+- Endereços que mudam significativamente de documento para documento
+- Datas idênticas em documentos que normalmente não coincidiriam
 
-━━━━━━━━━━━━━━━━━━━
-REGRAS ABSOLUTAS
-━━━━━━━━━━━━━━━━━━━
-1. NUNCA invente dados. Se não encontrou, diga "dado não localizado no documento".
-2. SEMPRE cite os valores exatos encontrados (ex: "Nome no RG: João Silva / Nome no CadÚnico: João da Silva — divergência no sobrenome")
-3. NÃO faça análise jurídica. NÃO cite leis. NÃO calcule carências.
-4. Documento ausente ("NÃO INFORMADO") = reportar como ausência, não como divergência.
+━━━ REGRAS ABSOLUTAS ━━━
+1. NUNCA invente dados. Se não encontrou, escreva "dado não localizado no documento".
+2. SEMPRE cite os valores exatos encontrados nos documentos.
+3. NÃO cite leis. NÃO calcule carências. Apenas compare.
 
-━━━━━━━━━━━━━━━━━━━
-FORMATO DE SAÍDA (JSON PURO, SEM MARKDOWN)
-━━━━━━━━━━━━━━━━━━━
+━━━ SAÍDA OBRIGATÓRIA: JSON PURO, SEM MARKDOWN ━━━
 {
-  "documentos_presentes": ["lista dos ids presentes"],
-  "documentos_ausentes": ["lista dos ids ausentes"],
+  "documentos_presentes": ["lista de IDs: rg, rgp, certificado, residencia, cadunico, receita, cnis, reap2124, reap25, dae, contrato"],
+  "documentos_ausentes": ["lista de IDs ausentes"],
   "divergencias": [
     {
       "tipo": "critico|atencao|ok",
@@ -126,127 +186,94 @@ FORMATO DE SAÍDA (JSON PURO, SEM MARKDOWN)
     }
   ]
 }
-
-Gere entre 6 e 10 divergências. Priorize: críticas primeiro, atenções depois, conformes por último.
+Gere 6–10 divergências. Ordem: críticos → atenções → conformes.
 `;
 
-// ─────────────────────────────────────────────
-// PROMPT B — PERITO JURÍDICO
-// Objetivo: verificar conformidade com a base legal vigente
-// ─────────────────────────────────────────────
-const SYSTEM_PROMPT_B = `
+// ── PROMPT B — PERITO JURÍDICO (Groq) ────────────────────────────────────────
+
+const SYSTEM_B = `
 Você é um PERITO JURÍDICO especializado na legislação do Seguro Defeso do Pescador Artesanal (SDGP).
 
-SEU ÚNICO PAPEL:
-Verificar se os dados dos documentos atendem aos requisitos legais vigentes.
-Você NÃO compara documentos entre si. Você verifica conformidade com a lei.
+SEU ÚNICO PAPEL: verificar se os dados dos documentos atendem aos requisitos legais vigentes.
+Você NÃO compara documentos entre si. Você apenas verifica conformidade com a lei.
 
-━━━━━━━━━━━━━━━━━━━
-BASE LEGAL VIGENTE (OBRIGATÓRIA)
-━━━━━━━━━━━━━━━━━━━
+━━━ BASE LEGAL VIGENTE ━━━
 - Lei nº 10.779/2003 (com alterações da MP 1.323/2025)
 - Portaria MPA nº 127/2023
 - Resolução CODEFAT nº 1.027/2025
-- Medida Provisória nº 1.323/2025 / PL de Conversão nº 1/2026
+- PL de Conversão nº 1/2026 (conversão da MP 1.323/2025, publicado em 24/03/2026)
 - Instrução Normativa PRES/INSS nº 188/2025
 
-━━━━━━━━━━━━━━━━━━━
-CHECKLIST JURÍDICO OBRIGATÓRIO
-━━━━━━━━━━━━━━━━━━━
+━━━ CHECKLIST JURÍDICO ━━━
 
-[J1] DOCUMENTOS OBRIGATÓRIOS POR LEI:
-Com base na MP 1.323/2025 e Resolução CODEFAT 1.027/2025, verificar:
-- RG/CIN — obrigatório (art. 1º, §10 da Lei 10.779 com redação da MP)
-- CadÚnico — OBRIGATÓRIO (art. 2º, §3º: MTE deve verificar inscrição no CadÚnico)
-- Comprovante de residência — mínimo 1 ano (exigência da Portaria MPA 127/2023)
-- RGP ativo — obrigatório (art. 2º da Lei 10.779)
-- Certificado de Regularidade — obrigatório (Portaria MPA 127/2023)
-- REAP 2025 — OBRIGATÓRIO para concessão em 2026 (art. 9º, parágrafo único do PL de Conversão)
-  ATENÇÃO: O PL de conversão art. 9º parágrafo único determina que em 2026 será exigido
-  APENAS o REAP referente ao ano de 2025 para fins de concessão do benefício.
-  Os REAPs de 2021 a 2024 têm prazo prorrogado até 31/12/2026, mas NÃO são
-  impeditivos para concessão em 2026 se o REAP 2025 estiver presente.
-- DAE da competência atual — comprovante de contribuição previdenciária (art. 2º, §2º, II)
-- Inscrição na Previdência Social — verificar via CNIS ou DAE (art. 2º, §3º)
+[J1] DOCUMENTOS OBRIGATÓRIOS POR LEI
+Com base na MP 1.323/2025 e PL de Conversão nº 1/2026:
+- RG/CIN → obrigatório (art. 1º, §10 da Lei 10.779 com redação da MP 1.323)
+- CadÚnico → OBRIGATÓRIO (art. 2º, §3º) — prazo de regularização: 180 dias da publicação
+- Comprovante de residência mínimo 1 ano → Portaria MPA 127/2023
+- RGP ativo → art. 2º da Lei 10.779
+- Certificado de Regularidade → Portaria MPA 127/2023
+- REAP 2025 → OBRIGATÓRIO para concessão em 2026 (art. 9º, §único do PL Conversão nº 1/2026)
+  ATENÇÃO CRÍTICA: em 2026 exige-se SOMENTE o REAP referente ao ano de 2025 para fins
+  de concessão. Os REAPs de 2021–2024 têm prazo prorrogado até 31/12/2026, mas NÃO
+  são impeditivos para concessão enquanto o REAP 2025 estiver presente.
+- DAE da competência atual → art. 2º, §2º, II
+- Inscrição na Previdência Social → art. 2º, §3º
 
-[J2] REQUISITOS DO RGP (Portaria MPA 127/2023):
+[J2] REQUISITOS DO RGP (Portaria MPA 127/2023)
 - Categoria: deve ser PESCADOR ARTESANAL (não industrial, não aquicultor)
 - Situação: deve estar ATIVO
-- Carência para Seguro Defeso: RGP deve ter pelo menos 1 (um) ano de registro
+- Carência para o Seguro Defeso: RGP deve ter pelo menos 1 (um) ano de registro
   antes do início do período de defeso
-- Verificar se há restrição ou suspensão registrada
 
-[J3] ATIVIDADE PESQUEIRA — CONFORMIDADE COM PORTARIA MPA 127/2023 (MA):
-Verificar especificamente para o Maranhão:
-- Período de defeso vigente: verificar se o período declarado é compatível com
-  a portaria de defeso do Maranhão (normalmente piracema/defeso camarão)
-- Espécies exploradas: verificar se as espécies declaradas no REAP são
-  contempladas pela portaria de defeso do MA
-- Ambiente de pesca: água doce, salgada ou estuarina — verificar compatibilidade
-- Petrechos utilizados (rede, tarrafa, anzol, espinhel, etc.) — verificar se
-  são compatíveis com a categoria artesanal e com a portaria
-- Área de atuação (município) — verificar se está dentro da área abrangida
-  pela portaria de defeso do MA
-- CNAE/CAEPF: código deve ser compatível com pesca artesanal (0311-6/01 ou equivalente)
+[J3] ATIVIDADE PESQUEIRA — PORTARIA MPA 127/2023 — MARANHÃO
+O pescador é do Maranhão. Verifique especificamente:
+- Espécies exploradas no REAP: são contempladas pela portaria de defeso do MA?
+  (Espécies típicas do MA: camarão-branco, camarão-rosa, curimatã, pirarucu, tambaqui)
+- Ambiente de pesca (água doce, salgada, estuarina): compatível com a portaria do MA?
+- Petrechos utilizados: compatíveis com a categoria artesanal?
+  (tarrafa, rede de espera, anzol, espinhel, covos são compatíveis; redes de arrasto industrial, não)
+- Município de pesca: dentro da área abrangida pela portaria do MA?
+- CNAE/CAEPF: código 0311-6/01 (pesca em água salgada) ou 0312-4/01 (pesca em água doce)
+  ou equivalente para pesca artesanal?
 
-[J4] CARÊNCIAS PREVIDENCIÁRIAS (calcular com dados do CNIS):
-Usando as contribuições identificadas no CNIS:
+[J4] CARÊNCIAS PREVIDENCIÁRIAS
+Usando contribuições identificadas no CNIS:
 
-a) SEGURO DEFESO (SDGP):
-   → Não há carência de contribuições para o seguro defeso em si
-   → Mas exige inscrição na Previdência Social e contribuição ativa
-   → Verificar se há contribuições nos meses de exercício da pesca
-   → Verificar se existe DAE da competência atual (contribuição em dia)
+a) SEGURO DEFESO: exige inscrição ativa na Previdência + contribuições nos meses de exercício.
+   Verificar se há DAE da competência atual (contribuição em dia).
 
-b) APOSENTADORIA POR TEMPO DE CONTRIBUIÇÃO/IDADE:
-   → 180 meses (15 anos) de contribuição — verificar total no CNIS
+b) APOSENTADORIA: 180 meses (15 anos) de contribuição. Total encontrado no CNIS?
 
-c) SALÁRIO MATERNIDADE (pescadora):
-   → 10 meses de contribuição — verificar no CNIS
+c) SALÁRIO MATERNIDADE (pescadora): 10 meses de contribuição. Total encontrado no CNIS?
 
-d) AUXÍLIO-DOENÇA:
-   → 12 meses de contribuição — verificar no CNIS
-   → Exceção: acidente de qualquer natureza não exige carência
+d) AUXÍLIO-DOENÇA: 12 meses de contribuição.
+   Exceção: acidente de qualquer natureza dispensa carência.
 
-[J5] IMPEDIMENTOS LEGAIS ABSOLUTOS:
-Verificar se existe qualquer dos seguintes:
-- Vínculo CLT ativo durante o período de defeso (art. 3º, §5º da Lei 10.779)
-  → IMPEDITIVO ABSOLUTO para recebimento do seguro defeso
-- Recebimento simultâneo de benefício previdenciário de caráter continuado
-  (aposentadoria, auxílio-doença etc.) durante o defeso
-  → IMPEDITIVO ABSOLUTO
-- Bloqueio/suspensão por fraude anterior (art. 3º: suspensão por 5 anos,
-  dobro em reincidência)
-- Inscrição no CadÚnico ausente — com a MP 1.323/2025 é condição obrigatória
-  (prazo de regularização de 180 dias da publicação da lei)
+[J5] IMPEDIMENTOS LEGAIS ABSOLUTOS
+- Vínculo CLT ativo durante o período de defeso → IMPEDITIVO ABSOLUTO (art. 3º, §5º Lei 10.779)
+- Benefício previdenciário de caráter continuado simultâneo ao defeso → IMPEDITIVO ABSOLUTO
+- Suspensão por fraude anterior → 5 anos (dobro em reincidência — art. 3º)
+- CadÚnico ausente com prazo de 180 dias já expirado → IMPEDITIVO
 
-[J6] BIOMETRIA E VALIDAÇÃO (MP 1.323/2025, art. 1º, §10):
-- A MP exige registro biométrico do requerente
-- Para fins de verificação: TSE, CNH ou CIN podem ser utilizados até
-  implementação plena da Carteira de Identidade Nacional
-- Verificar se o documento de identidade apresentado é compatível com
-  essa exigência
+[J6] BIOMETRIA E VALIDAÇÃO (MP 1.323/2025, art. 1º, §10)
+- Registro biométrico é exigido
+- Documentos aceitos: CIN, CNH ou base do TSE (período de transição até implementação plena da CIN)
+- Verificar se o documento de identidade apresentado é compatível com essa exigência
 
-[J7] REAP — ANÁLISE ESPECÍFICA:
-- Para 2026: apenas o REAP 2025 é exigido para concessão (PL art. 9º, §único)
-- O REAP deve conter: informações sobre venda do pescado, espécies,
-  ambiente, petrechos, município, período
-- Se REAP 2025 AUSENTE: pendência CRÍTICA para concessão em 2026
-- Se REAP 2021–2024 ausente mas REAP 2025 presente: atenção (prazo até 31/12/2026)
-- Verificar se o conteúdo do REAP atende ao formato exigido pelo CODEFAT
+[J7] REAP — ANÁLISE ESPECÍFICA
+- REAP 2025 AUSENTE → CRÍTICO IMPEDITIVO para concessão em 2026 (PL Conversão art. 9º, §único)
+- REAP 2021–2024 ausente + REAP 2025 presente → ATENÇÃO (prazo para regularizar até 31/12/2026)
+- Conteúdo mínimo exigido: venda do pescado, espécies, ambiente, petrechos, município, período
+- Formato deve atender ao estabelecido pelo CODEFAT (Resolução 1.027/2025)
 
-━━━━━━━━━━━━━━━━━━━
-REGRAS ABSOLUTAS
-━━━━━━━━━━━━━━━━━━━
-1. Cite SEMPRE o artigo/portaria/resolução que fundamenta cada apontamento.
-2. NUNCA invente dados. Se não há informação suficiente para avaliar, declare isso.
-3. NÃO compare documentos entre si. Apenas avalie se o que está nos docs atende à lei.
-4. Seja específico: não diga "pode ser irregular", diga "é irregular nos termos do art. X".
-5. Diferencie IMPEDITIVO (bloqueia o benefício) de PENDÊNCIA (pode ser regularizada).
+━━━ REGRAS ABSOLUTAS ━━━
+1. SEMPRE cite o artigo/portaria/resolução que fundamenta cada apontamento.
+2. NUNCA invente dados. Se não há informação suficiente, declare explicitamente.
+3. NÃO compare documentos entre si.
+4. Diferencie IMPEDITIVO (bloqueia o benefício) de PENDÊNCIA (pode ser regularizada).
 
-━━━━━━━━━━━━━━━━━━━
-FORMATO DE SAÍDA (JSON PURO, SEM MARKDOWN)
-━━━━━━━━━━━━━━━━━━━
+━━━ SAÍDA OBRIGATÓRIA: JSON PURO, SEM MARKDOWN ━━━
 {
   "conformidades_legais": [
     {
@@ -255,61 +282,45 @@ FORMATO DE SAÍDA (JSON PURO, SEM MARKDOWN)
       "titulo": "título curto",
       "base_legal": "dispositivo legal citado",
       "detalhe": "análise precisa com orientação de correção quando aplicável",
-      "imperativo": true|false
+      "imperativo": true
     }
   ]
 }
-
 imperativo = true significa que esse item BLOQUEIA o benefício se não resolvido.
-Gere entre 6 e 10 itens. Críticos primeiro, atenções depois, conformes por último.
+Gere 6–10 itens. Ordem: críticos → atenções → conformes.
 `;
 
-// ─────────────────────────────────────────────
-// PROMPT CONSOLIDADOR
-// ─────────────────────────────────────────────
-const SYSTEM_PROMPT_CONSOLIDADOR = `
+// ── PROMPT C — CONSOLIDADOR (OpenRouter DeepSeek R1) ─────────────────────────
+
+const SYSTEM_C = `
 Você é um CONSOLIDADOR DE ANÁLISES do Seguro Defeso do Pescador Artesanal (SDGP).
 
-Você recebe dois relatórios técnicos:
-- RELATÓRIO A: Análise documental interna (divergências entre documentos)
-- RELATÓRIO B: Análise jurídica (conformidade com a legislação vigente)
+Você recebe dois relatórios técnicos em JSON e deve consolidá-los em um único resultado final.
 
-SEU PAPEL:
-1. Eliminar redundâncias entre os dois relatórios
-2. Priorizar e ordenar os achados por gravidade
-3. Calcular o score final de regularização
-4. Gerar as diretivas finais consolidadas para o usuário
-
-━━━━━━━━━━━━━━━━━━━
-CÁLCULO DO SCORE (0–100)
-━━━━━━━━━━━━━━━━━━━
+━━━ CÁLCULO DO SCORE (0–100) ━━━
 Ponto de partida: 100
 
-Deduções:
+Deduções por item identificado:
 - Documento obrigatório AUSENTE: -12 pontos cada
-- Item CRÍTICO impeditivo absoluto (vínculo CLT, benefício simultâneo): -25 pontos cada
+- Impedimento absoluto (vínculo CLT ativo, benefício simultâneo): -25 pontos cada
 - Item CRÍTICO não impeditivo: -10 pontos cada
-- Item ATENÇÃO relevante: -4 pontos cada
-- Item ATENÇÃO menor: -2 pontos cada
+- Item ATENÇÃO relevante (ex: endereço diferente, REAP 2021-2024 ausente): -4 pontos cada
+- Item ATENÇÃO menor (ex: data levemente defasada): -2 pontos cada
 - Item OK/conforme: sem dedução
 
 Score mínimo: 0. Score máximo: 100.
 
-━━━━━━━━━━━━━━━━━━━
-REGRAS DE CONSOLIDAÇÃO
-━━━━━━━━━━━━━━━━━━━
-1. Se o mesmo problema aparecer nos dois relatórios, gere UMA ÚNICA diretiva (não duplique)
+━━━ REGRAS DE CONSOLIDAÇÃO ━━━
+1. Mesmo problema nos dois relatórios → UMA única diretiva (não duplicar)
 2. Mantenha a base legal do Relatório B quando disponível
-3. Mantenha os dados exatos do Relatório A quando disponível
-4. Combine os dois quando complementares
-5. A diretiva final deve conter: o problema + a base legal + como resolver
-6. Resumo deve ser objetivo e direto, máximo 2 frases
+3. Mantenha os valores exatos do Relatório A quando disponível
+4. Combine os dois quando forem complementares
+5. Cada diretiva deve conter: o problema + base legal (se houver) + como resolver
+6. Resumo: máximo 2 frases, objetivo e direto
 
-━━━━━━━━━━━━━━━━━━━
-FORMATO DE SAÍDA (JSON PURO, SEM MARKDOWN)
-━━━━━━━━━━━━━━━━━━━
+━━━ SAÍDA OBRIGATÓRIA: JSON PURO, SEM MARKDOWN ━━━
 {
-  "score": <0–100>,
+  "score": <número entre 0 e 100>,
   "resumo": "<situação geral em 1–2 frases objetivas>",
   "diretivas": [
     {
@@ -319,49 +330,11 @@ FORMATO DE SAÍDA (JSON PURO, SEM MARKDOWN)
     }
   ]
 }
-
-Gere entre 8 e 14 diretivas. Ordem: críticos → atenções → conformes.
+Gere 8–14 diretivas. Ordem obrigatória: críticos → atenções → conformes.
 `;
 
-// ─────────────────────────────────────────────
-// CHAMADA GROQ GENÉRICA
-// ─────────────────────────────────────────────
-async function chamarGroq({ systemPrompt, userMessage, maxTokens = 1500, label }) {
-  const response = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: MODELO_ANALISE,
-      temperature: 0.1,
-      max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-    }),
-  });
+// ── FUNÇÃO PRINCIPAL ──────────────────────────────────────────────────────────
 
-  if (!response.ok) {
-    const erro = await response.json().catch(() => ({}));
-    throw new Error(`[${label}] Erro Groq ${response.status}: ${erro?.error?.message || "desconhecido"}`);
-  }
-
-  const data = await response.json();
-  const raw = (data.choices?.[0]?.message?.content || "").replace(/```json|```/g, "").trim();
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw new Error(`[${label}] Resposta não é JSON válido: ${raw.slice(0, 200)}`);
-  }
-}
-
-// ─────────────────────────────────────────────
-// FUNÇÃO PRINCIPAL
-// ─────────────────────────────────────────────
 async function analisarDocumentos(dados) {
   const docsTexto = montarDocsTexto(dados.documentos);
 
@@ -369,7 +342,7 @@ async function analisarDocumentos(dados) {
     .filter(([, v]) => v?.trim()?.length > 10)
     .map(([k]) => k);
 
-  const todosIds = ["rg", "rgp", "certificado", "residencia", "cadunico", "receita", "cnis", "reap2124", "reap25", "dae", "contrato"];
+  const todosIds = ["rg","rgp","certificado","residencia","cadunico","receita","cnis","reap2124","reap25","dae","contrato"];
   const ausentes = todosIds.filter(d => !informados.includes(d));
 
   const cabecalho = `PESCADOR: ${dados.nome}
@@ -378,65 +351,82 @@ DATA HOJE: ${new Date().toLocaleDateString("pt-BR")}
 DOCS PRESENTES: ${informados.map(k => LABELS[k]).join(", ") || "nenhum"}
 DOCS AUSENTES: ${ausentes.map(k => LABELS[k]).join(", ") || "nenhum"}`;
 
-  const userMsgA = `${cabecalho}
+  const extras = dados.extras ? `\nINFORMAÇÕES ADICIONAIS: ${dados.extras}\n` : "";
 
-${dados.extras ? `INFORMAÇÕES ADICIONAIS: ${dados.extras}\n` : ""}
+  const msgA = `${cabecalho}${extras}
+
 DOCUMENTOS PARA CRUZAMENTO INTERNO:
 ${docsTexto}
 
-Execute todos os blocos C1 a C7. Para cada divergência encontrada, cite os valores exatos dos documentos.`;
+Execute todos os blocos C1 a C7. Cite sempre os valores exatos encontrados.`;
 
-  const userMsgB = `${cabecalho}
+  const msgB = `${cabecalho}${extras}
 
-${dados.extras ? `INFORMAÇÕES ADICIONAIS: ${dados.extras}\n` : ""}
 DOCUMENTOS PARA ANÁLISE DE CONFORMIDADE LEGAL:
 ${docsTexto}
 
-Execute todos os blocos J1 a J7. Para o bloco J3, considere que o pescador é do Maranhão.
-Para J4, calcule as carências usando as datas e competências encontradas nos documentos.`;
+Execute todos os blocos J1 a J7.
+Para J3: o pescador é do Maranhão — use a portaria de defeso do MA.
+Para J4: calcule as carências usando as datas e competências encontradas nos documentos.`;
 
-  // ── Modelos A e B em paralelo ──────────────
-  console.log("[SDGP] Iniciando análise paralela (Perito Documental + Perito Jurídico)...");
+  // ── Chamadas A (OpenRouter) e B (Groq) em paralelo ────────────────────────
+  console.log("[SDGP] Iniciando análise paralela...");
+  console.log("       → Perito Documental: OpenRouter (Llama 3.3 70B :free)");
+  console.log("       → Perito Jurídico:   Groq (Llama 3.3 70B)");
+
   const [resultadoA, resultadoB] = await Promise.all([
-    chamarGroq({
-      systemPrompt: SYSTEM_PROMPT_A,
-      userMessage: userMsgA,
-      maxTokens: 1800,
-      label: "PERITO-DOCUMENTAL",
+    chamarOpenRouter({
+      modeloPrincipal: PROVEDORES.openrouter.modeloPrincipal,
+      modeloFallback:  PROVEDORES.openrouter.modeloFallback,
+      systemPrompt:    SYSTEM_A,
+      userMessage:     msgA,
+      maxTokens:       2000,
+      label:           "PERITO-DOCUMENTAL",
     }),
-    chamarGroq({
-      systemPrompt: SYSTEM_PROMPT_B,
-      userMessage: userMsgB,
-      maxTokens: 1800,
-      label: "PERITO-JURIDICO",
+    chamar({
+      provedor:        "groq",
+      modelo:          PROVEDORES.groq.modelo,
+      systemPrompt:    SYSTEM_B,
+      userMessage:     msgB,
+      maxTokens:       2000,
+      label:           "PERITO-JURIDICO",
     }),
   ]);
 
   console.log("[SDGP] Paralelo concluído. Iniciando consolidação...");
+  console.log("       → Consolidador: OpenRouter (DeepSeek R1 :free)");
 
-  // ── Consolidador ──────────────────────────
-  const userMsgConsolidador = `RELATÓRIO A — PERITO DOCUMENTAL (divergências internas):
+  // ── Chamada C — Consolidador (OpenRouter DeepSeek R1) ─────────────────────
+  const msgC = `RELATÓRIO A — PERITO DOCUMENTAL (divergências internas entre documentos):
 ${JSON.stringify(resultadoA, null, 2)}
 
-RELATÓRIO B — PERITO JURÍDICO (conformidade legal):
+RELATÓRIO B — PERITO JURÍDICO (conformidade com a legislação vigente):
 ${JSON.stringify(resultadoB, null, 2)}
 
-Consolide os dois relatórios. Elimine redundâncias. Calcule o score. Gere as diretivas finais.`;
+Consolide os dois relatórios eliminando redundâncias, calcule o score e gere as diretivas finais.`;
 
-  const consolidado = await chamarGroq({
-    systemPrompt: SYSTEM_PROMPT_CONSOLIDADOR,
-    userMessage: userMsgConsolidador,
-    maxTokens: 2000,
-    label: "CONSOLIDADOR",
+  const consolidado = await chamarOpenRouter({
+    modeloPrincipal: PROVEDORES.openrouter.modeloConsolidador,
+    modeloFallback:  PROVEDORES.openrouter.modeloPrincipal,
+    systemPrompt:    SYSTEM_C,
+    userMessage:     msgC,
+    maxTokens:       2500,
+    label:           "CONSOLIDADOR",
   });
 
-  // ── Validação e normalização ───────────────
+  // ── Normalização final ────────────────────────────────────────────────────
   consolidado.score = Math.max(0, Math.min(100, Math.round(Number(consolidado.score) || 0)));
   if (!Array.isArray(consolidado.diretivas)) consolidado.diretivas = [];
   if (!consolidado.resumo) consolidado.resumo = "Análise concluída. Verifique as diretivas abaixo.";
 
-  console.log(`[SDGP] Análise finalizada. Score: ${consolidado.score}`);
+  console.log(`[SDGP] Finalizado. Score: ${consolidado.score} | Diretivas: ${consolidado.diretivas.length}`);
   return consolidado;
 }
 
 module.exports = { analisarDocumentos };
+
+
+
+
+
+
