@@ -3,6 +3,7 @@ const Tesseract = require("tesseract.js");
 
 // pdfjs-dist v5 — importação correta
 const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.mjs"); // ESM apenas na v5
+const path = require("path"); // ← estava faltando isso
 // Em Node.js o worker é desabilitado automaticamente pelo pdfjs,
 // mas workerSrc precisa existir antes disso ou o código quebra.
 // Apontamos para o arquivo worker dentro do próprio pacote instalado.
