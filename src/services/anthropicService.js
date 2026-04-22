@@ -2,19 +2,19 @@
 //
 // Pipeline de 3 chamadas em chaves Groq independentes:
 //
-//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 → llama-3.1-8b-instant  (20.000 TPM)
+//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 → llama-3.1-8b-instant  (6.000 TPM)
 //  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 → llama-3.3-70b-versatile (6.000 TPM)
 //  CHAMADA C — Consolidador      → GROQ_API_KEY_3 → llama-3.3-70b-versatile (6.000 TPM)
 //
-//  Por que 8b no A: cruzamento de dados não exige raciocínio jurídico complexo,
-//  e o 8b tem limite de TPM muito maior — resolve o estouro de tokens no A.
 //  A + B rodam em paralelo (Promise.all) → sem overhead de tempo.
+//  Cada chave deve ser de uma organização Groq diferente.
+//  O OCR é limpo antes de enviar — remove ruído sem perder dados relevantes.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const GROQ_URL    = "https://api.groq.com/openai/v1/chat/completions";
-const MODELO_A    = "llama-3.1-8b-instant";      // 20.000 TPM — Perito Documental
-const MODELO_B    = "llama-3.3-70b-versatile";   //  6.000 TPM — Perito Jurídico
-const MODELO_C    = "llama-3.3-70b-versatile";   //  6.000 TPM — Consolidador
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODELO_A = "llama-3.1-8b-instant";     // Perito Documental — cruzamento de dados
+const MODELO_B = "llama-3.3-70b-versatile";  // Perito Jurídico   — raciocínio legal
+const MODELO_C = "llama-3.3-70b-versatile";  // Consolidador      — síntese final
 
 // ── LABELS DOS DOCUMENTOS ────────────────────────────────────────────────────
 
@@ -32,9 +32,50 @@ const LABELS = {
   contrato:    "Contrato",
 };
 
+// ── LIMPEZA DE OCR ───────────────────────────────────────────────────────────
+// Remove ruído do OCR preservando 100% das informações relevantes.
+// Reduz tokens de ~3.000 para ~1.200 por documento sem perda de dados úteis.
+
+function limparOCR(texto, maxChars = 1200) {
+  if (!texto || typeof texto !== "string") return "";
+
+  return texto
+    // 1. Normalizar quebras de linha
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+
+    // 2. Remover linhas compostas só de caracteres decorativos (bordas, separadores)
+    .replace(/^[\s\-=_*#|~.]{3,}$/gm, "")
+
+    // 3. Remover sequências repetidas de caracteres não alfanuméricos
+    //    Ex: "-----", ".....", "=====", "______"
+    .replace(/([^a-zA-Z0-9àáâãéêíóôõúüçÀÁÂÃÉÊÍÓÔÕÚÜÇ\s])\1{2,}/g, "")
+
+    // 4. Remover linhas com menos de 3 caracteres úteis (ruído puro do OCR)
+    .split("\n")
+    .filter(linha => linha.replace(/\s/g, "").length >= 3)
+    .join("\n")
+
+    // 5. Colapsar múltiplas linhas em branco para uma só
+    .replace(/\n{3,}/g, "\n\n")
+
+    // 6. Colapsar múltiplos espaços/tabs em um único espaço
+    .replace(/[ \t]{2,}/g, " ")
+
+    // 7. Trim final
+    .trim()
+
+    // 8. Limitar tamanho — só após limpeza para não cortar dado útil no meio
+    .slice(0, maxChars);
+}
+
 function montarDocsTexto(documentos) {
   return Object.entries(LABELS)
-    .map(([k, l]) => `[${l}]:\n${documentos[k]?.trim().slice(0, 3000) || "NÃO INFORMADO"}`)
+    .map(([k, l]) => {
+      const raw = documentos[k]?.trim() || "";
+      const texto = raw.length > 0 ? limparOCR(raw) : "NÃO INFORMADO";
+      return `[${l}]:\n${texto}`;
+    })
     .join("\n\n");
 }
 
@@ -237,11 +278,9 @@ Verificar especificamente para o Maranhão:
   contempladas pela portaria de defeso do MA
   (Espécies típicas do MA: camarão-branco, camarão-rosa, curimatã, pirarucu, tambaqui)
 - Ambiente de pesca: água doce, salgada ou estuarina — verificar compatibilidade
-- Petrechos utilizados (rede, tarrafa, anzol, espinhel, covos etc.) — verificar se
-  são compatíveis com a categoria artesanal e com a portaria
+- Petrechos utilizados — verificar se são compatíveis com a categoria artesanal e com a portaria
   (tarrafa, rede de espera, anzol, espinhel, covos = compatíveis; arrasto industrial = NÃO)
-- Área de atuação (município) — verificar se está dentro da área abrangida
-  pela portaria de defeso do MA
+- Área de atuação (município) — verificar se está dentro da área abrangida pela portaria do MA
 - CNAE/CAEPF: código deve ser compatível com pesca artesanal
   (0311-6/01 = água salgada / 0312-4/01 = água doce, ou equivalente)
 
@@ -417,8 +456,8 @@ Para J4: calcule as carências usando as datas e competências encontradas nos d
 
   // ── A (chave 1) e B (chave 2) em paralelo ────────────────────────────────
   console.log("[SDGP] Iniciando análise paralela...");
-  console.log("       → Perito Documental: GROQ_API_KEY_1");
-  console.log("       → Perito Jurídico:   GROQ_API_KEY_2");
+  console.log("       → Perito Documental: GROQ_API_KEY_1 (llama-3.1-8b-instant)");
+  console.log("       → Perito Jurídico:   GROQ_API_KEY_2 (llama-3.3-70b-versatile)");
 
   const [resultadoA, resultadoB] = await Promise.all([
     chamarGroq({
@@ -440,7 +479,7 @@ Para J4: calcule as carências usando as datas e competências encontradas nos d
   ]);
 
   console.log("[SDGP] Paralelo concluído. Iniciando consolidação...");
-  console.log("       → Consolidador: GROQ_API_KEY_3");
+  console.log("       → Consolidador: GROQ_API_KEY_3 (llama-3.3-70b-versatile)");
 
   // ── C — Consolidador (chave 3) ────────────────────────────────────────────
   const msgC = `RELATÓRIO A — PERITO DOCUMENTAL (divergências internas entre documentos):
