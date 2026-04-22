@@ -111,6 +111,12 @@ async function chamarGroq({ apiKey, modelo, systemPrompt, userMessage, maxTokens
 
   const data = await response.json();
 
+  // Capturar uso de tokens reportado pela API
+  const usage = data.usage || {};
+  const tokensEntrada = usage.prompt_tokens     || 0;
+  const tokensSaida   = usage.completion_tokens || 0;
+  const tokensTotal   = usage.total_tokens      || (tokensEntrada + tokensSaida);
+
   // Limpar fences de markdown residuais
   let raw = (data.choices?.[0]?.message?.content || "").trim();
   raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
@@ -120,7 +126,10 @@ async function chamarGroq({ apiKey, modelo, systemPrompt, userMessage, maxTokens
   if (jsonStart > 0) raw = raw.slice(jsonStart);
 
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Anexar usage ao resultado para consolidação de métricas
+    parsed.__usage = { label, modelo, tokensEntrada, tokensSaida, tokensTotal };
+    return parsed;
   } catch {
     throw new Error(`[${label}] JSON inválido na resposta: ${raw.slice(0, 300)}`);
   }
@@ -513,7 +522,76 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
   if (!Array.isArray(consolidado.diretivas)) consolidado.diretivas = [];
   if (!consolidado.resumo) consolidado.resumo = "Análise concluída. Verifique as diretivas abaixo.";
 
-  console.log(`[SDGP] Finalizado. Score: ${consolidado.score} | Diretivas: ${consolidado.diretivas.length}`);
+  // ── Métricas de tokens das 3 chamadas ────────────────────────────────────
+  const usageA = resultadoA.__usage || {};
+  const usageB = resultadoB.__usage || {};
+  const usageC = consolidado.__usage || {};
+
+  // Remover __usage do resultado final (não deve ir para o frontend)
+  delete resultadoA.__usage;
+  delete resultadoB.__usage;
+  delete consolidado.__usage;
+
+  const totalInput  = (usageA.tokensEntrada || 0) + (usageB.tokensEntrada || 0) + (usageC.tokensEntrada || 0);
+  const totalOutput = (usageA.tokensSaida   || 0) + (usageB.tokensSaida   || 0) + (usageC.tokensSaida   || 0);
+  const totalGeral  = totalInput + totalOutput;
+
+  // ── Tabela de preços por modelo (USD por 1M tokens) ──────────────────────
+  // Fonte: preços públicos — atualizar conforme necessário
+  const PRECOS = {
+    "llama-3.1-8b-instant":    { input: 0.05,  output: 0.08  }, // Groq free / on-demand
+    "llama-3.3-70b-versatile": { input: 0.59,  output: 0.79  }, // Groq on-demand
+    "claude-sonnet-4-5":       { input: 3.00,  output: 15.00 }, // Anthropic
+    "claude-opus-4":           { input: 15.00, output: 75.00 }, // Anthropic
+    "gpt-4o":                  { input: 2.50,  output: 10.00 }, // OpenAI
+    "gpt-4o-mini":             { input: 0.15,  output: 0.60  }, // OpenAI
+    "gemini-2.0-flash":        { input: 0.10,  output: 0.40  }, // Google
+  };
+
+  function calcularCusto(modeloNome, tokIn, tokOut) {
+    const p = PRECOS[modeloNome];
+    if (!p) return null;
+    const custoInput  = (tokIn  / 1_000_000) * p.input;
+    const custoOutput = (tokOut / 1_000_000) * p.output;
+    return (custoInput + custoOutput);
+  }
+
+  // Custo real desta análise (modelos usados)
+  const custoA = calcularCusto(MODELO_A, usageA.tokensEntrada || 0, usageA.tokensSaida || 0);
+  const custoB = calcularCusto(MODELO_B, usageB.tokensEntrada || 0, usageB.tokensSaida || 0);
+  const custoC = calcularCusto(MODELO_C, usageC.tokensEntrada || 0, usageC.tokensSaida || 0);
+  const custoReal = (custoA || 0) + (custoB || 0) + (custoC || 0);
+
+  // Projeção: e se usasse modelos pagos para todas as 3 chamadas?
+  function projetarCusto(modeloNome) {
+    const c = calcularCusto(modeloNome, totalInput, totalOutput);
+    return c !== null ? `U$ ${c.toFixed(6)}` : "N/A";
+  }
+
+  console.log("\n┌─────────────────────────────────────────────────────────┐");
+  console.log("│                  SDGP — USO DE TOKENS                   │");
+  console.log("├──────────────────────┬──────────┬──────────┬────────────┤");
+  console.log("│ Chamada              │  Entrada │   Saída  │    Total   │");
+  console.log("├──────────────────────┼──────────┼──────────┼────────────┤");
+  console.log(`│ A Perito Documental  │ ${String(usageA.tokensEntrada||0).padStart(8)} │ ${String(usageA.tokensSaida||0).padStart(8)} │ ${String(usageA.tokensTotal||0).padStart(10)} │`);
+  console.log(`│ B Perito Jurídico    │ ${String(usageB.tokensEntrada||0).padStart(8)} │ ${String(usageB.tokensSaida||0).padStart(8)} │ ${String(usageB.tokensTotal||0).padStart(10)} │`);
+  console.log(`│ C Consolidador       │ ${String(usageC.tokensEntrada||0).padStart(8)} │ ${String(usageC.tokensSaida||0).padStart(8)} │ ${String(usageC.tokensTotal||0).padStart(10)} │`);
+  console.log("├──────────────────────┼──────────┼──────────┼────────────┤");
+  console.log(`│ TOTAL                │ ${String(totalInput).padStart(8)} │ ${String(totalOutput).padStart(8)} │ ${String(totalGeral).padStart(10)} │`);
+  console.log("└──────────────────────┴──────────┴──────────┴────────────┘");
+  console.log("\n  Custo real desta análise (Groq on-demand):");
+  console.log(`  A (llama-3.1-8b-instant):    U$ ${(custoA||0).toFixed(6)}`);
+  console.log(`  B (llama-3.3-70b-versatile): U$ ${(custoB||0).toFixed(6)}`);
+  console.log(`  C (llama-3.3-70b-versatile): U$ ${(custoC||0).toFixed(6)}`);
+  console.log(`  TOTAL REAL:                  U$ ${custoReal.toFixed(6)}`);
+  console.log("\n  Projeção: se usasse modelo pago para todas as chamadas:");
+  console.log(`  claude-sonnet-4-5:   ${projetarCusto("claude-sonnet-4-5")}`);
+  console.log(`  claude-opus-4:       ${projetarCusto("claude-opus-4")}`);
+  console.log(`  gpt-4o:              ${projetarCusto("gpt-4o")}`);
+  console.log(`  gpt-4o-mini:         ${projetarCusto("gpt-4o-mini")}`);
+  console.log(`  gemini-2.0-flash:    ${projetarCusto("gemini-2.0-flash")}`);
+  console.log(`\n  Score: ${consolidado.score} | Diretivas: ${consolidado.diretivas.length}\n`);
+
   return consolidado;
 }
 
