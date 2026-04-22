@@ -2,16 +2,19 @@
 //
 // Pipeline de 3 chamadas em chaves Groq independentes:
 //
-//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 (rate limit próprio)
-//  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 (rate limit próprio)
-//  CHAMADA C — Consolidador      → GROQ_API_KEY_3 (recebe JSONs pequenos)
+//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 → llama-3.1-8b-instant  (20.000 TPM)
+//  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 → llama-3.3-70b-versatile (6.000 TPM)
+//  CHAMADA C — Consolidador      → GROQ_API_KEY_3 → llama-3.3-70b-versatile (6.000 TPM)
 //
-//  A + B rodam em paralelo (Promise.all) → sem overhead de tempo
-//  Cada chave tem 6.000 TPM e 1.000 RPD independentes entre si
+//  Por que 8b no A: cruzamento de dados não exige raciocínio jurídico complexo,
+//  e o 8b tem limite de TPM muito maior — resolve o estouro de tokens no A.
+//  A + B rodam em paralelo (Promise.all) → sem overhead de tempo.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODELO   = "llama-3.3-70b-versatile";
+const GROQ_URL    = "https://api.groq.com/openai/v1/chat/completions";
+const MODELO_A    = "llama-3.1-8b-instant";      // 20.000 TPM — Perito Documental
+const MODELO_B    = "llama-3.3-70b-versatile";   //  6.000 TPM — Perito Jurídico
+const MODELO_C    = "llama-3.3-70b-versatile";   //  6.000 TPM — Consolidador
 
 // ── LABELS DOS DOCUMENTOS ────────────────────────────────────────────────────
 
@@ -37,7 +40,7 @@ function montarDocsTexto(documentos) {
 
 // ── CHAMADA GROQ GENÉRICA ────────────────────────────────────────────────────
 
-async function chamarGroq({ apiKey, systemPrompt, userMessage, maxTokens = 2000, label }) {
+async function chamarGroq({ apiKey, modelo, systemPrompt, userMessage, maxTokens = 2000, label }) {
   if (!apiKey) throw new Error(`[${label}] Chave de API ausente. Verifique o .env.`);
 
   const response = await fetch(GROQ_URL, {
@@ -47,7 +50,7 @@ async function chamarGroq({ apiKey, systemPrompt, userMessage, maxTokens = 2000,
       "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: MODELO,
+      model: modelo,
       temperature: 0.1,
       max_tokens: maxTokens,
       messages: [
@@ -151,14 +154,22 @@ REGRAS ABSOLUTAS
 1. NUNCA invente dados. Se não encontrou, escreva "dado não localizado no documento".
 2. SEMPRE cite os valores exatos encontrados. Ex: "Nome no RG: João Silva / Nome no CadÚnico: João da Silva"
 3. NÃO faça análise jurídica. NÃO cite leis. NÃO calcule carências.
-4. Documento ausente ("NÃO INFORMADO") = reportar como ausência, não como divergência.
+4. Documento ausente ("NÃO INFORMADO") = reportar como ausência no C1, mas NÃO bloqueia
+   a análise dos demais blocos. Analise SEMPRE todos os documentos que estiverem presentes,
+   independentemente de quantos foram enviados. Mesmo com 1 documento, faça a análise.
+5. NUNCA use IDs inventados. Use APENAS os IDs exatos desta lista:
+   rg · rgp · certificado · residencia · cadunico · receita · cnis · reap2124 · reap25 · dae · contrato
 
 ━━━━━━━━━━━━━━━━━━━
 FORMATO DE SAÍDA: JSON PURO, SEM MARKDOWN
 ━━━━━━━━━━━━━━━━━━━
+ATENÇÃO: os campos "documentos_presentes" e "documentos_ausentes" devem conter
+APENAS os IDs exatos desta lista (nada mais, nada menos):
+rg · rgp · certificado · residencia · cadunico · receita · cnis · reap2124 · reap25 · dae · contrato
+
 {
-  "documentos_presentes": ["lista dos IDs presentes: rg, rgp, certificado, residencia, cadunico, receita, cnis, reap2124, reap25, dae, contrato"],
-  "documentos_ausentes": ["lista dos IDs ausentes"],
+  "documentos_presentes": ["rg", "cadunico"],
+  "documentos_ausentes": ["rgp", "certificado", "residencia", "receita", "cnis", "reap2124", "reap25", "dae", "contrato"],
   "divergencias": [
     {
       "tipo": "critico|atencao|ok",
@@ -412,6 +423,7 @@ Para J4: calcule as carências usando as datas e competências encontradas nos d
   const [resultadoA, resultadoB] = await Promise.all([
     chamarGroq({
       apiKey:       process.env.GROQ_API_KEY_1,
+      modelo:       MODELO_A,
       systemPrompt: SYSTEM_A,
       userMessage:  msgA,
       maxTokens:    2000,
@@ -419,6 +431,7 @@ Para J4: calcule as carências usando as datas e competências encontradas nos d
     }),
     chamarGroq({
       apiKey:       process.env.GROQ_API_KEY_2,
+      modelo:       MODELO_B,
       systemPrompt: SYSTEM_B,
       userMessage:  msgB,
       maxTokens:    2000,
@@ -440,6 +453,7 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
 
   const consolidado = await chamarGroq({
     apiKey:       process.env.GROQ_API_KEY_3,
+    modelo:       MODELO_C,
     systemPrompt: SYSTEM_C,
     userMessage:  msgC,
     maxTokens:    2500,
@@ -456,4 +470,3 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
 }
 
 module.exports = { analisarDocumentos };
-
