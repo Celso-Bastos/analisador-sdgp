@@ -36,7 +36,7 @@ const LABELS = {
 // Remove ruído do OCR preservando 100% das informações relevantes.
 // Reduz tokens de ~3.000 para ~1.200 por documento sem perda de dados úteis.
 
-function limparOCR(texto, maxChars = 1200) {
+function limparOCR(texto, maxChars = 800) {
   if (!texto || typeof texto !== "string") return "";
 
   return texto
@@ -239,7 +239,13 @@ rg · rgp · certificado · residencia · cadunico · receita · cnis · reap212
   ]
 }
 
-Gere entre 6 e 10 divergências. Priorize: críticas primeiro, atenções depois, conformes por último.
+REGRA ANTI-CONTRADIÇÃO (OBRIGATÓRIA):
+- Valores IGUAIS entre documentos = tipo "ok", NUNCA reportar como divergência
+- Mesmo município, mesmo nome, mesma data = CONFORME, não divergente
+- Só gere uma diretiva de divergência se os valores forem REALMENTE diferentes
+- NÃO invente problemas para atingir um número mínimo
+- Se não houver divergência em um bloco, registre como "ok" com detalhe "Sem divergências identificadas"
+- Gere apenas divergências REAIS — pode ser 1, pode ser 10, conforme o que encontrar
 `;
 
 // ── PROMPT B — PERITO JURÍDICO ────────────────────────────────────────────────
@@ -539,7 +545,7 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
   // ── Tabela de preços por modelo (USD por 1M tokens) ──────────────────────
   // Fonte: preços públicos — atualizar conforme necessário
   const PRECOS = {
-    "llama-3.1-8b-instant":    { input: 0.05,  output: 0.08  }, // Groq free / on-demand
+    "llama-3.1-8b-instant":    { input: 0.05,  output: 0.08  }, // Groq on-demand
     "llama-3.3-70b-versatile": { input: 0.59,  output: 0.79  }, // Groq on-demand
     "claude-sonnet-4-5":       { input: 3.00,  output: 15.00 }, // Anthropic
     "claude-opus-4":           { input: 15.00, output: 75.00 }, // Anthropic
@@ -547,6 +553,13 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
     "gpt-4o-mini":             { input: 0.15,  output: 0.60  }, // OpenAI
     "gemini-2.0-flash":        { input: 0.10,  output: 0.40  }, // Google
   };
+
+  // Cotação USD → BRL (atualizar periodicamente ou buscar via API de câmbio)
+  const USD_BRL = parseFloat(process.env.USD_BRL || "4.9655");
+
+  function usdParaBrl(usd) {
+    return (usd * USD_BRL).toFixed(6);
+  }
 
   function calcularCusto(modeloNome, tokIn, tokOut) {
     const p = PRECOS[modeloNome];
@@ -562,28 +575,30 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
   const custoC = calcularCusto(MODELO_C, usageC.tokensEntrada || 0, usageC.tokensSaida || 0);
   const custoReal = (custoA || 0) + (custoB || 0) + (custoC || 0);
 
-  // Projeção: e se usasse modelos pagos para todas as 3 chamadas?
+  // Projeção: e se usasse modelo pago para todas as 3 chamadas?
   function projetarCusto(modeloNome) {
-    const c = calcularCusto(modeloNome, totalInput, totalOutput);
-    return c !== null ? `U$ ${c.toFixed(6)}` : "N/A";
+    const usd = calcularCusto(modeloNome, totalInput, totalOutput);
+    if (usd === null) return "N/A";
+    return `U$ ${usd.toFixed(6)}  (R$ ${usdParaBrl(usd)})`;
   }
 
-  console.log("\n┌─────────────────────────────────────────────────────────┐");
-  console.log("│                  SDGP — USO DE TOKENS                   │");
-  console.log("├──────────────────────┬──────────┬──────────┬────────────┤");
-  console.log("│ Chamada              │  Entrada │   Saída  │    Total   │");
-  console.log("├──────────────────────┼──────────┼──────────┼────────────┤");
-  console.log(`│ A Perito Documental  │ ${String(usageA.tokensEntrada||0).padStart(8)} │ ${String(usageA.tokensSaida||0).padStart(8)} │ ${String(usageA.tokensTotal||0).padStart(10)} │`);
-  console.log(`│ B Perito Jurídico    │ ${String(usageB.tokensEntrada||0).padStart(8)} │ ${String(usageB.tokensSaida||0).padStart(8)} │ ${String(usageB.tokensTotal||0).padStart(10)} │`);
-  console.log(`│ C Consolidador       │ ${String(usageC.tokensEntrada||0).padStart(8)} │ ${String(usageC.tokensSaida||0).padStart(8)} │ ${String(usageC.tokensTotal||0).padStart(10)} │`);
-  console.log("├──────────────────────┼──────────┼──────────┼────────────┤");
-  console.log(`│ TOTAL                │ ${String(totalInput).padStart(8)} │ ${String(totalOutput).padStart(8)} │ ${String(totalGeral).padStart(10)} │`);
-  console.log("└──────────────────────┴──────────┴──────────┴────────────┘");
+  console.log("\n┌──────────────────────────────────────────────────────────────┐");
+  console.log("│                    SDGP — USO DE TOKENS                      │");
+  console.log("├──────────────────────┬──────────┬──────────┬─────────────────┤");
+  console.log("│ Chamada              │  Entrada │   Saída  │       Total      │");
+  console.log("├──────────────────────┼──────────┼──────────┼─────────────────┤");
+  console.log(`│ A Perito Documental  │ ${String(usageA.tokensEntrada||0).padStart(8)} │ ${String(usageA.tokensSaida||0).padStart(8)} │ ${String(usageA.tokensTotal||0).padStart(15)} │`);
+  console.log(`│ B Perito Jurídico    │ ${String(usageB.tokensEntrada||0).padStart(8)} │ ${String(usageB.tokensSaida||0).padStart(8)} │ ${String(usageB.tokensTotal||0).padStart(15)} │`);
+  console.log(`│ C Consolidador       │ ${String(usageC.tokensEntrada||0).padStart(8)} │ ${String(usageC.tokensSaida||0).padStart(8)} │ ${String(usageC.tokensTotal||0).padStart(15)} │`);
+  console.log("├──────────────────────┼──────────┼──────────┼─────────────────┤");
+  console.log(`│ TOTAL                │ ${String(totalInput).padStart(8)} │ ${String(totalOutput).padStart(8)} │ ${String(totalGeral).padStart(15)} │`);
+  console.log("└──────────────────────┴──────────┴──────────┴─────────────────┘");
+  console.log(`\n  Cotação utilizada: 1 USD = R$ ${USD_BRL.toFixed(4)}`);
   console.log("\n  Custo real desta análise (Groq on-demand):");
-  console.log(`  A (llama-3.1-8b-instant):    U$ ${(custoA||0).toFixed(6)}`);
-  console.log(`  B (llama-3.3-70b-versatile): U$ ${(custoB||0).toFixed(6)}`);
-  console.log(`  C (llama-3.3-70b-versatile): U$ ${(custoC||0).toFixed(6)}`);
-  console.log(`  TOTAL REAL:                  U$ ${custoReal.toFixed(6)}`);
+  console.log(`  A (llama-3.1-8b-instant):    U$ ${(custoA||0).toFixed(6)}  (R$ ${usdParaBrl(custoA||0)})`);
+  console.log(`  B (llama-3.3-70b-versatile): U$ ${(custoB||0).toFixed(6)}  (R$ ${usdParaBrl(custoB||0)})`);
+  console.log(`  C (llama-3.3-70b-versatile): U$ ${(custoC||0).toFixed(6)}  (R$ ${usdParaBrl(custoC||0)})`);
+  console.log(`  TOTAL REAL:                  U$ ${custoReal.toFixed(6)}  (R$ ${usdParaBrl(custoReal)})`);
   console.log("\n  Projeção: se usasse modelo pago para todas as chamadas:");
   console.log(`  claude-sonnet-4-5:   ${projetarCusto("claude-sonnet-4-5")}`);
   console.log(`  claude-opus-4:       ${projetarCusto("claude-opus-4")}`);
