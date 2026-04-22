@@ -94,6 +94,8 @@ async function chamarGroq({ apiKey, modelo, systemPrompt, userMessage, maxTokens
       model: modelo,
       temperature: 0.1,
       max_tokens: maxTokens,
+      // Força retorno em JSON puro — sem markdown, sem texto livre
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user",   content: userMessage   },
@@ -108,7 +110,14 @@ async function chamarGroq({ apiKey, modelo, systemPrompt, userMessage, maxTokens
   }
 
   const data = await response.json();
-  const raw  = (data.choices?.[0]?.message?.content || "").replace(/```json|```/g, "").trim();
+
+  // Limpar fences de markdown residuais
+  let raw = (data.choices?.[0]?.message?.content || "").trim();
+  raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+
+  // Se vier texto antes do JSON, extrair só o objeto
+  const jsonStart = raw.indexOf("{");
+  if (jsonStart > 0) raw = raw.slice(jsonStart);
 
   try {
     return JSON.parse(raw);
