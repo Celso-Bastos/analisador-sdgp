@@ -294,19 +294,115 @@ Com base na MP 1.323/2025 e Resolução CODEFAT 1.027/2025, verificar:
   antes do início do período de defeso
 - Verificar se há restrição ou suspensão registrada
 
-[J3] ATIVIDADE PESQUEIRA — CONFORMIDADE COM PORTARIA MPA 127/2023 (MARANHÃO)
-Verificar especificamente para o Maranhão:
-- Período de defeso vigente: verificar se o período declarado é compatível com
-  a portaria de defeso do Maranhão (piracema/defeso camarão)
-- Espécies exploradas: verificar se as espécies declaradas no REAP são
-  contempladas pela portaria de defeso do MA
-  (Espécies típicas do MA: camarão-branco, camarão-rosa, curimatã, pirarucu, tambaqui)
-- Ambiente de pesca: água doce, salgada ou estuarina — verificar compatibilidade
-- Petrechos utilizados — verificar se são compatíveis com a categoria artesanal e com a portaria
-  (tarrafa, rede de espera, anzol, espinhel, covos = compatíveis; arrasto industrial = NÃO)
-- Área de atuação (município) — verificar se está dentro da área abrangida pela portaria do MA
-- CNAE/CAEPF: código deve ser compatível com pesca artesanal
-  (0311-6/01 = água salgada / 0312-4/01 = água doce, ou equivalente)
+[J3] ATIVIDADE PESQUEIRA — VALIDAÇÃO TRIANGULAR POR PORTARIA (MARANHÃO)
+
+IMPORTANTE: Existem duas portarias de defeso aplicáveis ao MA com regras distintas.
+A validação deve ser feita em 4 etapas obrigatórias:
+
+ETAPA 1 — IDENTIFICAR PORTARIA PELO MUNICÍPIO DE RESIDÊNCIA (CadÚnico):
+Use o município do CadÚnico como base e verifique em qual portaria ele se enquadra.
+
+  PORTARIA 75/17 — Portaria Interministerial MDIC/MMA nº 75/2017
+  Período de defeso: 01/01 a 31/05
+  Ambiente: MARINHO (água salgada / estuarina)
+  Área de pesca: Mar ou Estuário
+  Espécies permitidas: camarão-rosa (Farfantepenaeus brasiliensis) e camarão-branco (Litopenaeus schmitti)
+  Petrechos compatíveis: rede de arrasto artesanal, tarrafa, rede de espera
+  CNAE compatível: 0311-6/01 (pesca em água salgada)
+  Municípios MA abrangidos (62 municípios):
+  Água Doce do Maranhão, Alcântara, Amapá do Maranhão, Anajatuba, Apicum-Açu, Araioses,
+  Axixá, Bacabeira, Bacuri, Bacurituba, Barreirinhas, Belágua, Bequimão, Boa Vista do Gurupi,
+  Cachoeira Grande, Cajapió, Cândido Mendes, Carutapera, Cedral, Central do Maranhão,
+  Cururupu, Godofredo Viana, Governador Nunes Freire, Guimarães, Humberto de Campos,
+  Icatu, Ilha Grande, Itapecuru Mirim, Junco do Maranhão, Luís Domingues,
+  Magalhães de Almeida, Maracaçumé, Matinha, Mirinzal, Morros, Olinda Nova do Maranhão,
+  Paulino Neves, Paço do Lumiar, Peri Mirim, Pinheiro, Porto Rico do Maranhão,
+  Presidente Juscelino, Primeira Cruz, Raposa, Rosário, Santa Helena,
+  Santa Quitéria do Maranhão, Santa Rita, Santana do Maranhão, Santo Amaro do Maranhão,
+  Serrano do Maranhão, São Bento, São Bernardo, São João Batista, São José de Ribamar,
+  São Luís, São Vicente Ferrer, Turiaçu, Turilândia, Tutóia, Urbano Santos, Viana
+
+  PORTARIA 85/03 — Portaria IBAMA nº 85/2003
+  Período de defeso: 01/12 a 30/03
+  Ambiente: CONTINENTAL (água doce)
+  Área de pesca: Rio ou Lago (bacias hidrográficas continentais)
+  Espécies permitidas: todas as espécies ocorrentes nas bacias continentais do MA
+  (curimatã, tambaqui, pirarucu, jaraqui, matrinxã, pacu e demais espécies de rio)
+  Petrechos compatíveis: tarrafa, rede de espera, anzol, espinhel, covo
+  CNAE compatível: 0312-4/01 (pesca em água doce)
+  Municípios MA abrangidos (217 municípios — inclui todos os da Portaria 75 exceto Ilha Grande,
+  mais municípios exclusivamente continentais como: Açailândia, Aldeias Altas, Altamira do Maranhão,
+  Alto Alegre do Maranhão, Alto Alegre do Pindaré, Alto Parnaíba, Amarante do Maranhão,
+  Anapurus, Araguanã, Arame, Arari, Bacabal, Balsas, Barra do Corda, Barão de Grajaú,
+  Bela Vista do Maranhão, Benedito Leite, Bernardo do Mearim, Bom Jardim, Bom Jesus das Selvas,
+  Bom Lugar, Brejo, Brejo de Areia, Buriti, Buriti Bravo, Buriticupu, Buritirana,
+  Cajari, Campestre do Maranhão, Cantanhede, Capinzal do Norte, Carolina, Caxias,
+  Centro Novo do Maranhão, Centro do Guilherme, Chapadinha, Cidelândia, Codó, Coelho Neto,
+  Colinas, Conceição do Lago-Açu, Coroatá, Davinópolis, Dom Pedro, Duque Bacelar,
+  Esperantinópolis, Estreito, Feira Nova do Maranhão, Fernando Falcão, Formosa da Serra Negra,
+  Fortaleza dos Nogueiras, Fortuna, Gonçalves Dias, Governador Archer, Governador Edison Lobão,
+  Governador Eugênio Barros, Governador Luiz Rocha, Governador Newton Bello, Grajaú,
+  Graça Aranha, Igarapé Grande, Igarapé do Meio, Imperatriz, Itaipava do Grajaú,
+  Itinga do Maranhão, Jatobá, Jenipapo dos Vieiras, Joselândia, João Lisboa,
+  Lago Verde, Lago da Pedra, Lago do Junco, Lago dos Rodrigues, Lagoa Grande do Maranhão,
+  Lagoa do Mato, Lajeado Novo, Lima Campos, Loreto, Marajá do Sena, Maranhãozinho,
+  Mata Roma, Matões, Matões do Norte, Milagres do Maranhão, Mirador, Miranda do Norte,
+  Montes Altos, Monção, Nina Rodrigues, Nova Colinas, Nova Iorque, Nova Olinda do Maranhão,
+  Olho d Água das Cunhãs, Palmeirândia, Paraibano, Parnarama, Passagem Franca, Pastos Bons,
+  Paulo Ramos, Pedreiras, Pedro do Rosário, Penalva, Peritoró, Pindaré-Mirim, Pio XII,
+  Pirapemas, Porto Franco, Poção de Pedras, Presidente Dutra, Presidente Médici,
+  Presidente Sarney, Presidente Vargas, Riachão, Ribamar Fiquene, Sambaíba,
+  Santa Filomena do Maranhão, Santa Inês, Santa Luzia, Santa Luzia do Paruá,
+  Santo Antônio dos Lopes, Satubinha, Senador Alexandre Costa, Senador La Rocque,
+  Sucupira do Norte, Sucupira do Riachão, São Benedito do Rio Preto,
+  São Domingos do Azeitão, São Domingos do Maranhão, São Francisco do Brejão,
+  São Francisco do Maranhão, São Félix de Balsas, São José dos Basílios, São João do Carú,
+  São João do Paraíso, São João do Soter, São João dos Patos, São Luís Gonzaga do Maranhão,
+  São Mateus do Maranhão, São Pedro da Água Branca, São Pedro dos Crentes,
+  São Raimundo das Mangabeiras, São Raimundo do Doca Bezerra, São Roberto,
+  Sítio Novo, Tasso Fragoso, Timbiras, Timon, Trizidela do Vale, Tufilândia, Tuntum,
+  Vargem Grande, Vila Nova dos Martírios, Vitorino Freire, Vitória do Mearim, Zé Doca,
+  e todos os 61 municípios da Portaria 75 exceto Ilha Grande)
+
+ETAPA 2 — MUNICÍPIOS COM DUPLA ABRANGÊNCIA (61 municípios nas duas portarias):
+Os seguintes municípios se enquadram em AMBAS as portarias — o pescador pode exercer
+pesca continental (P85) E/OU pesca marinha (P75). Nesse caso verificar qual o REAP declara
+e se a declaração é INTERNAMENTE CONSISTENTE (ambiente + área + produto + portaria):
+Água Doce do Maranhão, Alcântara, Amapá do Maranhão, Anajatuba, Apicum-Açu, Araioses,
+Axixá, Bacabeira, Bacuri, Bacurituba, Barreirinhas, Belágua, Bequimão, Boa Vista do Gurupi,
+Cachoeira Grande, Cajapió, Cândido Mendes, Carutapera, Cedral, Central do Maranhão,
+Cururupu, Godofredo Viana, Governador Nunes Freire, Guimarães, Humberto de Campos,
+Icatu, Itapecuru Mirim, Junco do Maranhão, Luís Domingues, Magalhães de Almeida,
+Maracaçumé, Matinha, Mirinzal, Morros, Olinda Nova do Maranhão, Paulino Neves,
+Paço do Lumiar, Peri Mirim, Pinheiro, Porto Rico do Maranhão, Presidente Juscelino,
+Primeira Cruz, Raposa, Rosário, Santa Helena, Santa Quitéria do Maranhão, Santa Rita,
+Santana do Maranhão, Santo Amaro do Maranhão, Serrano do Maranhão, São Bento,
+São Bernardo, São João Batista, São José de Ribamar, São Luís, São Vicente Ferrer,
+Turiaçu, Turilândia, Tutóia, Urbano Santos, Viana
+
+ETAPA 3 — VALIDAÇÃO TRIANGULAR OBRIGATÓRIA:
+Para cada portaria identificada, verificar se os 3 elementos do REAP são compatíveis SIMULTANEAMENTE:
+
+  SE PORTARIA 75 (marinha):
+  ✓ Ambiente deve ser: marinho / água salgada / estuarina
+  ✓ Área deve ser: mar ou estuário (NÃO pode ser rio ou lago)
+  ✓ Produto deve ser: camarão-rosa ou camarão-branco
+  ✗ INCOMPATÍVEL: ambiente água doce + produto peixe + portaria 75
+
+  SE PORTARIA 85 (continental):
+  ✓ Ambiente deve ser: continental / água doce / rio / lago
+  ✓ Área deve ser: rio ou lago (NÃO pode ser mar ou estuário)
+  ✓ Produto deve ser: espécies de água doce (curimatã, tambaqui, pirarucu, jaraqui etc.)
+  ✗ INCOMPATÍVEL: ambiente marinho + produto camarão + portaria 85
+
+  SE MUNICÍPIO DUPLO e REAP declara AMBAS as portarias:
+  → Verificar se cada conjunto (portaria + ambiente + área + produto) é individualmente consistente
+
+ETAPA 4 — CRUZAMENTO COM MUNICÍPIO DE PESCA (REAP):
+- Município de residência (CadÚnico) → portaria(s) aplicável(is)
+- Município de pesca (REAP) → deve estar na mesma portaria ou ser limítrofe
+- Se município de pesca NÃO estiver na portaria identificada → CRÍTICO
+- Petrechos compatíveis com a categoria artesanal e com a portaria identificada?
 
 [J4] CARÊNCIAS PREVIDENCIÁRIAS (calcular com dados do CNIS)
 Usando as contribuições identificadas no CNIS:
