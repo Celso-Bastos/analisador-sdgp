@@ -153,6 +153,38 @@ RGP · Certificado de Regularidade · REAP 2021–2024 · REAP 2025
 CNIS · DAE Competência Atual · Contrato
 
 ━━━━━━━━━━━━━━━━━━━
+NORMALIZAÇÃO OBRIGATÓRIA ANTES DE QUALQUER COMPARAÇÃO
+━━━━━━━━━━━━━━━━━━━
+Antes de comparar QUALQUER valor entre documentos, aplique estas normalizações:
+
+DATAS — formatos diferentes do mesmo dia são IGUAIS:
+  "15/03/1985" = "15 de março de 1985" = "1985-03-15" = "15-03-85" → IGUAIS, não reportar
+  Só é divergência se dia, mês ou ano forem numericamente diferentes.
+
+ENDEREÇOS — variações de escrita são IGUAIS:
+  "Rua" = "R." = "RUA" → mesma coisa
+  "Avenida" = "Av." = "AV" → mesma coisa
+  Maiúsculas/minúsculas não são divergência.
+  Acentuação inconsistente do OCR (ex: "Anajatuba" vs "Anajatuba") → ignorar.
+  Espaços duplos ou simples → ignorar.
+  Só é divergência se o nome da rua, número ou município forem SEMANTICAMENTE diferentes.
+
+NOMES — variações de escrita são IGUAIS:
+  Maiúsculas/minúsculas não são divergência ("JOÃO SILVA" = "João Silva").
+  Acentuação inconsistente do OCR → ignorar.
+  Só é divergência se uma parte do nome estiver ausente ou trocada.
+
+DOCUMENTOS IDÊNTICOS — se o mesmo arquivo foi enviado em dois campos:
+  Os dados serão idênticos. Não reportar como divergência — reportar como "ok".
+
+ARTEFATOS DE OCR — não são divergências:
+  Caracteres estranhos isolados, espaços extras, quebras de linha inesperadas
+  são erros do OCR, não diferenças reais nos documentos.
+
+SE APÓS NORMALIZAÇÃO OS VALORES FOREM IGUAIS → tipo "ok", NUNCA reportar como divergência.
+SE APÓS NORMALIZAÇÃO OS VALORES FOREM DIFERENTES → aí sim reportar com os valores exatos.
+
+━━━━━━━━━━━━━━━━━━━
 CHECKLIST OBRIGATÓRIO DE CRUZAMENTOS
 ━━━━━━━━━━━━━━━━━━━
 
