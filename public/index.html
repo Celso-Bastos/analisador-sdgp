@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SDGP — Analisador de Regularização</title>
+  <!-- ACCESS_KEY injetada pelo servidor via template ou variável de ambiente -->
+  <!-- Em produção substitua "CONFIGURAR" pelo valor real ou use server-side rendering -->
+  <meta name="access-key" content="CONFIGURAR" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -293,6 +296,33 @@
 const arquivos = [];
 let proximoId = 0;
 
+// ── AUTENTICAÇÃO ──────────────────────────────────────────────────────────────
+// A chave é injetada pelo servidor no HTML ou configurada aqui diretamente.
+// Em produção: nunca expor a chave em repositório público.
+const ACCESS_KEY = document.querySelector("meta[name=access-key]")?.content || "";
+
+// Fetch autenticado — adiciona X-Access-Key em todas as chamadas à API
+async function apiFetch(url, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  if (ACCESS_KEY) headers["X-Access-Key"] = ACCESS_KEY;
+  return fetch(url, { ...options, headers });
+}
+
+// ── SEGURANÇA: ESCAPE HTML ────────────────────────────────────────────────────
+// Impede XSS — nunca inserir dados externos diretamente via innerHTML
+function esc(str) {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 // ── MÁSCARA CPF ──────────────────────────────────────────────────────────────
 document.getElementById("cpf").addEventListener("input", function () {
   let v = this.value.replace(/\D/g, "");
@@ -333,9 +363,8 @@ async function adicionarArquivos(fileList) {
       const base64 = await toBase64(file);
 
       // 2. Enviar para OCR
-      const res = await fetch("/api/ocr", {
+      const res = await apiFetch("/api/ocr", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ base64, tipo: file.type }),
       });
       const data = await res.json();
@@ -380,7 +409,7 @@ function renderItem(entrada) {
   div.innerHTML = `
     <span class="arquivo-icone">${icone}</span>
     <div class="arquivo-info">
-      <div class="arquivo-nome" title="${entrada.nome}">${entrada.nome}</div>
+      <div class="arquivo-nome" title="${esc(entrada.nome)}">${esc(entrada.nome)}</div>
       <div class="arquivo-status" id="status-${entrada.id}">Extraindo texto...</div>
     </div>
     <div class="spinner-mini" id="spinner-${entrada.id}"></div>
@@ -469,9 +498,8 @@ async function analisar() {
   document.getElementById("progresso-barra").style.width = "65%";
 
   try {
-    const response = await fetch("/api/analisar", {
+    const response = await apiFetch("/api/analisar", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nome, cpf, documentos }),
     });
 
@@ -548,14 +576,20 @@ function renderResultado(r, classificacao) {
     }
   }
 
-  // Diretivas
+  // Diretivas — esc() em todos os campos vindos da IA para prevenir XSS
   const tagMap = { ok: "Conforme", atencao: "Atenção", critico: "Pendência crítica" };
-  document.getElementById("diretivas").innerHTML = (r.diretivas || []).map(d => `
-    <div class="diretiva ${d.tipo}">
-      <div class="dir-tag">${tagMap[d.tipo] || d.tipo} — ${d.titulo}</div>
-      <div class="dir-texto">${d.texto}</div>
-    </div>
-  `).join("");
+  const tiposPermitidos = ["ok", "atencao", "critico"];
+  document.getElementById("diretivas").innerHTML = (r.diretivas || []).map(d => {
+    const tipo  = tiposPermitidos.includes(d.tipo) ? d.tipo : "atencao";
+    const tag   = esc(tagMap[tipo] || tipo);
+    const titulo = esc(d.titulo || "");
+    const texto  = esc(d.texto  || "");
+    return `
+    <div class="diretiva ${tipo}">
+      <div class="dir-tag">${tag} — ${titulo}</div>
+      <div class="dir-texto">${texto}</div>
+    </div>`;
+  }).join("");
 
   document.getElementById("pagina-form").style.display = "none";
   document.getElementById("resultado").classList.add("visivel");
