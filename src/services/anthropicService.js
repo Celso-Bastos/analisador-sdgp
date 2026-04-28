@@ -1,16 +1,19 @@
 // src/services/anthropicService.js
 //
-// Pipeline de 4 chamadas em chaves Groq independentes:
+// Pipeline de 5 chamadas em chaves Groq independentes:
 //
-//  CHAMADA 0 — Classificador     → GROQ_API_KEY_4 → llama-3.3-70b-versatile (6.000 TPM)
-//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 → llama-3.1-8b-instant    (6.000 TPM)
-//  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 → llama-3.3-70b-versatile (6.000 TPM)
-//  CHAMADA C — Consolidador      → GROQ_API_KEY_3 → llama-3.3-70b-versatile (6.000 TPM)
+//  CHAMADA 0 — Classificador     → GROQ_API_KEY_4 → llama-3.3-70b-versatile
+//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 → llama-3.1-8b-instant
+//  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 → llama-3.3-70b-versatile (recebe contexto de A)
+//  CHAMADA C — Consolidador      → GROQ_API_KEY_3 → llama-3.3-70b-versatile
+//  CHAMADA D — Verificador       → GROQ_API_KEY_5 → llama-3.3-70b-versatile
 //
-//  0 roda primeiro → identifica cada documento do array recebido
-//  A + B rodam em paralelo após a classificação
+//  Melhorias implementadas:
+//  [M2] Limite de chars por tipo de documento (CNIS/REAP: 2000, RG: 400)
+//  [M4] Resultado de A alimenta contexto de B (não mais paralelos)
+//  [M5] Chain of Thought em A e B (campo raciocinio antes do JSON)
+//  [M10] Chamada D verifica consistência do resultado final
 //  Cada chave deve ser de uma organização Groq diferente.
-//  O OCR é limpo antes de enviar — remove ruído sem perder dados relevantes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -18,6 +21,25 @@ const MODELO_0 = "llama-3.3-70b-versatile";  // Classificador     — identifica
 const MODELO_A = "llama-3.1-8b-instant";     // Perito Documental — cruzamento de dados
 const MODELO_B = "llama-3.3-70b-versatile";  // Perito Jurídico   — raciocínio legal
 const MODELO_C = "llama-3.3-70b-versatile";  // Consolidador      — síntese final
+const MODELO_D = "llama-3.3-70b-versatile";  // Verificador       — valida consistência
+
+// ── MELHORIA 2: LIMITE DE CHARS POR TIPO DE DOCUMENTO ────────────────────────
+// Documentos com dados ricos (CNIS, REAP, Contrato) recebem limite maior.
+// Documentos simples (RG, DAE) recebem limite menor para economizar tokens.
+// Total estimado com 11 docs: ~12.000 chars → ~3.000 tokens de conteúdo.
+const LIMITE_CHARS = {
+  rg:          400,   // Nome, CPF, RG, data nasc, filiação — dados curtos
+  rgp:         600,   // Número RGP, categoria, situação, município, validade
+  certificado: 400,   // Número, validade, situação
+  residencia:  500,   // Endereço completo, data do documento
+  cadunico:    800,   // Endereço, dados pessoais, composição familiar
+  receita:     500,   // Situação CPF, data consulta
+  cnis:       2000,   // Histórico completo de contribuições — CRÍTICO, precisa de mais espaço
+  reap2124:   1500,   // Declarações de 4 anos — dados extensos
+  reap25:     1500,   // Declaração 2025 — obrigatória para 2026
+  dae:         400,   // Competência, valor, código
+  contrato:    800,   // Datas, partes, tipo de vínculo
+};
 
 // ── LABELS DOS DOCUMENTOS ────────────────────────────────────────────────────
 
@@ -128,8 +150,10 @@ function montarDocsTexto(documentos) {
   return Object.entries(LABELS)
     .map(([k, l]) => {
       const raw = documentos[k]?.trim() || "";
-      // limparOCR remove ruído, sanitizarParaPrompt remove tentativas de injection
-      const texto = raw.length > 0 ? sanitizarParaPrompt(limparOCR(raw)) : "NÃO INFORMADO";
+      if (!raw) return `[${l}]:\nNÃO INFORMADO`;
+      // Usar limite específico por tipo de documento (Melhoria 2)
+      const limite = LIMITE_CHARS[k] || 800;
+      const texto = sanitizarParaPrompt(limparOCR(raw, limite));
       return `[${l}]:\n${texto}`;
     })
     .join("\n\n");
@@ -361,7 +385,13 @@ ATENÇÃO: os campos "documentos_presentes" e "documentos_ausentes" devem conter
 APENAS os IDs exatos desta lista (nada mais, nada menos):
 rg · rgp · certificado · residencia · cadunico · receita · cnis · reap2124 · reap25 · dae · contrato
 
+MELHORIA 5 — CHAIN OF THOUGHT:
+Antes de gerar as divergências, preencha o campo "raciocinio" com seu processo de análise.
+Escreva o que encontrou em cada documento, o que comparou, e por que concluiu o que concluiu.
+Isso força um raciocínio explícito que melhora a qualidade das divergências geradas.
+
 {
+  "raciocinio": "Analisei o RG e encontrei nome X, data Y. No CadÚnico encontrei nome X (igual), data Y (igual). No CNIS encontrei endereço Z, no CadÚnico endereço W — são diferentes...",
   "documentos_presentes": ["rg", "cadunico"],
   "documentos_ausentes": ["rgp", "certificado", "residencia", "receita", "cnis", "reap2124", "reap25", "dae", "contrato"],
   "divergencias": [
@@ -603,7 +633,15 @@ REGRAS ABSOLUTAS
 ━━━━━━━━━━━━━━━━━━━
 FORMATO DE SAÍDA: JSON PURO, SEM MARKDOWN
 ━━━━━━━━━━━━━━━━━━━
+MELHORIA 5 — CHAIN OF THOUGHT:
+Antes de gerar os itens, preencha o campo "raciocinio" com seu processo de análise jurídica.
+Para cada bloco J1-J7, escreva o que encontrou nos documentos e como chegou à conclusão.
+Exemplo: "J1: CadÚnico presente, RGP presente, REAP 2025 ausente — impeditivo para 2026.
+J3: município Anajatuba está na Portaria 75 (marinha) e na 85 (continental). REAP declara
+ambiente estuarino e camarão — compatível com P75. Verificar se petrechos são artesanais..."
+
 {
+  "raciocinio": "J1: verifiquei os documentos obrigatórios... J2: RGP com situação X... J3: município Y está na portaria Z...",
   "conformidades_legais": [
     {
       "tipo": "critico|atencao|ok",
@@ -763,27 +801,53 @@ Execute todos os blocos J1 a J7.
 Para J3: o pescador é do Maranhão — use a portaria de defeso do MA.
 Para J4: calcule as carências usando as datas e competências encontradas nos documentos.`;
 
-  // ── A (chave 1) e B (chave 2) em paralelo ────────────────────────────────
-  console.log("[SDGP] Análise paralela iniciada — Perito Documental (KEY_1) + Perito Jurídico (KEY_2)");
+  // ── MELHORIA 4: A roda primeiro, resultado alimenta B ────────────────────
+  // A e B NÃO são mais paralelos — A roda, seu resultado vai como contexto para B.
+  // Isso permite que o Perito Jurídico saiba quais divergências documentais já foram
+  // identificadas antes de avaliar a conformidade legal.
+  console.log("[SDGP] Chamada A — Perito Documental (KEY_1)");
 
-  const [resultadoA, resultadoB] = await Promise.all([
-    chamarGroq({
-      apiKey:       process.env.GROQ_API_KEY_1,
-      modelo:       MODELO_A,
-      systemPrompt: SYSTEM_A,
-      userMessage:  msgA,
-      maxTokens:    2000,
-      label:        "PERITO-DOCUMENTAL",
-    }),
-    chamarGroq({
-      apiKey:       process.env.GROQ_API_KEY_2,
-      modelo:       MODELO_B,
-      systemPrompt: SYSTEM_B,
-      userMessage:  msgB,
-      maxTokens:    2000,
-      label:        "PERITO-JURIDICO",
-    }),
-  ]);
+  const resultadoA = await chamarGroq({
+    apiKey:       process.env.GROQ_API_KEY_1,
+    modelo:       MODELO_A,
+    systemPrompt: SYSTEM_A,
+    userMessage:  msgA,
+    maxTokens:    2000,
+    label:        "PERITO-DOCUMENTAL",
+  });
+
+  // Extrair divergências críticas do resultado A para contextualizar o Perito Jurídico
+  const divergenciasCriticas = (resultadoA.divergencias || [])
+    .filter(d => d.tipo === "critico")
+    .map(d => `- [${d.categoria}] ${d.titulo}: ${d.detalhe}`)
+    .join("\n") || "Nenhuma divergência crítica identificada.";
+
+  const docsAusentes = (resultadoA.documentos_ausentes || [])
+    .map(id => LABELS[id] || id)
+    .join(", ") || "nenhum";
+
+  // Contexto do Perito Documental para o Perito Jurídico
+  const contextoA = `
+CONTEXTO DO PERITO DOCUMENTAL (análise prévia dos documentos):
+Documentos ausentes identificados: ${docsAusentes}
+Divergências críticas encontradas:
+${divergenciasCriticas}
+
+Use este contexto para aprofundar sua análise jurídica nos pontos críticos já identificados.
+Se há vínculo CLT identificado, trate como impeditivo absoluto.
+Se há divergência de endereço, verifique implicações para a portaria aplicável.
+`;
+
+  console.log("[SDGP] Chamada B — Perito Jurídico (KEY_2) com contexto da Chamada A");
+
+  const resultadoB = await chamarGroq({
+    apiKey:       process.env.GROQ_API_KEY_2,
+    modelo:       MODELO_B,
+    systemPrompt: SYSTEM_B,
+    userMessage:  msgB + contextoA,
+    maxTokens:    2200,
+    label:        "PERITO-JURIDICO",
+  });
 
   console.log("[SDGP] Paralelo concluído. Iniciando consolidação...");
   console.log("       → Consolidador: GROQ_API_KEY_3 (llama-3.3-70b-versatile)");
@@ -806,23 +870,101 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
     label:        "CONSOLIDADOR",
   });
 
-  // ── Normalização final ────────────────────────────────────────────────────
+  // ── Normalização intermediária antes do Verificador ─────────────────────
   consolidado.score = Math.max(0, Math.min(100, Math.round(Number(consolidado.score) || 0)));
   if (!Array.isArray(consolidado.diretivas)) consolidado.diretivas = [];
   if (!consolidado.resumo) consolidado.resumo = "Análise concluída. Verifique as diretivas abaixo.";
 
-  // ── Métricas de tokens das 3 chamadas ────────────────────────────────────
+  // ── MELHORIA 10: CHAMADA D — VERIFICADOR ──────────────────────────────────
+  // Recebe o resultado consolidado e verifica consistência interna.
+  // Detecta contradições, scores incoerentes e diretivas mal classificadas.
+  // Usa GROQ_API_KEY_5 — organização independente.
+  console.log("[SDGP] Chamada D — Verificador (KEY_5)");
+
+  const msgD = `Você recebeu o resultado final de uma análise do Seguro Defeso do Pescador Artesanal.
+Verifique se o resultado é internamente consistente antes de ser entregue ao usuário.
+
+RESULTADO A VERIFICAR:
+${JSON.stringify(consolidado, null, 2)}
+
+VERIFICAÇÕES OBRIGATÓRIAS:
+1. O score está coerente com as diretivas? (muitos críticos + score alto = inconsistente)
+2. Há diretivas contraditórias? (ex: "endereço conforme" e "endereço divergente" ao mesmo tempo)
+3. Há diretivas classificadas errado? (ex: REAP 2025 ausente classificado como "atencao" em vez de "critico")
+4. O resumo reflete o score e as diretivas?
+5. Há diretivas duplicadas ou redundantes que passaram pelo Consolidador?
+
+REGRAS DE CORREÇÃO:
+- Se score > 80 mas há itens críticos impeditivos → reduzir score para no máximo 60
+- Se score < 40 mas só há itens de atenção → aumentar score para no mínimo 50
+- Remover diretivas duplicadas mantendo a mais detalhada
+- Corrigir classificação errada de tipo (critico/atencao/ok)
+- Ajustar resumo se não refletir a realidade das diretivas
+
+SAÍDA OBRIGATÓRIA: JSON PURO, SEM MARKDOWN
+Se não houver nenhuma inconsistência → retorne o resultado original sem alterações.
+Se houver inconsistências → retorne o resultado corrigido.
+
+{
+  "raciocinio_verificacao": "verifiquei o score X contra Y diretivas críticas...",
+  "inconsistencias_encontradas": ["lista do que foi corrigido, ou vazio se nada foi corrigido"],
+  "score": <número corrigido ou original>,
+  "resumo": "<resumo corrigido ou original>",
+  "diretivas": [<diretivas corrigidas ou originais>]
+}`;
+
+  let verificado;
+  try {
+    verificado = await chamarGroq({
+      apiKey:       process.env.GROQ_API_KEY_5,
+      modelo:       MODELO_D,
+      systemPrompt: `Você é um VERIFICADOR DE QUALIDADE de análises do Seguro Defeso do Pescador Artesanal.
+Sua função é detectar inconsistências, contradições e erros de classificação no resultado final
+antes de ser entregue ao usuário. Você NÃO refaz a análise — apenas verifica e corrige
+inconsistências internas. Retorne sempre JSON puro.`,
+      userMessage:  msgD,
+      maxTokens:    2500,
+      label:        "VERIFICADOR",
+    });
+
+    // Aplicar correções do verificador se válidas
+    if (verificado && Array.isArray(verificado.diretivas) && verificado.diretivas.length > 0) {
+      consolidado.score    = Math.max(0, Math.min(100, Math.round(Number(verificado.score) || consolidado.score)));
+      consolidado.resumo   = verificado.resumo   || consolidado.resumo;
+      consolidado.diretivas = verificado.diretivas;
+
+      const inconsistencias = verificado.inconsistencias_encontradas || [];
+      if (inconsistencias.length > 0) {
+        console.log("[SDGP] Verificador corrigiu:", inconsistencias.join(" | "));
+      } else {
+        console.log("[SDGP] Verificador: resultado consistente, sem correções.");
+      }
+    }
+  } catch (err) {
+    // Verificador falhou — usar resultado do Consolidador sem interromper o fluxo
+    console.warn("[SDGP] Verificador falhou (usando resultado do Consolidador):", err.message);
+    verificado = null;
+  }
+
+  // Normalização final após verificação
+  consolidado.score = Math.max(0, Math.min(100, Math.round(Number(consolidado.score) || 0)));
+  if (!Array.isArray(consolidado.diretivas)) consolidado.diretivas = [];
+  if (!consolidado.resumo) consolidado.resumo = "Análise concluída. Verifique as diretivas abaixo.";
+
+  // ── Métricas de tokens das 4 chamadas (A, B, C, D) ──────────────────────
   const usageA = resultadoA.__usage || {};
   const usageB = resultadoB.__usage || {};
   const usageC = consolidado.__usage || {};
+  const usageD = verificado?.__usage || {};
 
-  // Remover __usage do resultado final (não deve ir para o frontend)
+  // Remover __usage dos resultados (não deve ir para o frontend)
   delete resultadoA.__usage;
   delete resultadoB.__usage;
   delete consolidado.__usage;
+  if (verificado) delete verificado.__usage;
 
-  const totalInput  = (usageA.tokensEntrada || 0) + (usageB.tokensEntrada || 0) + (usageC.tokensEntrada || 0);
-  const totalOutput = (usageA.tokensSaida   || 0) + (usageB.tokensSaida   || 0) + (usageC.tokensSaida   || 0);
+  const totalInput  = (usageA.tokensEntrada || 0) + (usageB.tokensEntrada || 0) + (usageC.tokensEntrada || 0) + (usageD.tokensEntrada || 0);
+  const totalOutput = (usageA.tokensSaida   || 0) + (usageB.tokensSaida   || 0) + (usageC.tokensSaida   || 0) + (usageD.tokensSaida   || 0);
   const totalGeral  = totalInput + totalOutput;
 
   // ── Tabela de preços por modelo (USD por 1M tokens) ──────────────────────
@@ -856,7 +998,8 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
   const custoA = calcularCusto(MODELO_A, usageA.tokensEntrada || 0, usageA.tokensSaida || 0);
   const custoB = calcularCusto(MODELO_B, usageB.tokensEntrada || 0, usageB.tokensSaida || 0);
   const custoC = calcularCusto(MODELO_C, usageC.tokensEntrada || 0, usageC.tokensSaida || 0);
-  const custoReal = (custoA || 0) + (custoB || 0) + (custoC || 0);
+  const custoD = calcularCusto(MODELO_D, usageD.tokensEntrada || 0, usageD.tokensSaida || 0);
+  const custoReal = (custoA || 0) + (custoB || 0) + (custoC || 0) + (custoD || 0);
 
   // Projeção: e se usasse modelo pago para todas as 3 chamadas?
   function projetarCusto(modeloNome) {
@@ -873,6 +1016,7 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
   console.log(`│ A Perito Documental  │ ${String(usageA.tokensEntrada||0).padStart(8)} │ ${String(usageA.tokensSaida||0).padStart(8)} │ ${String(usageA.tokensTotal||0).padStart(15)} │`);
   console.log(`│ B Perito Jurídico    │ ${String(usageB.tokensEntrada||0).padStart(8)} │ ${String(usageB.tokensSaida||0).padStart(8)} │ ${String(usageB.tokensTotal||0).padStart(15)} │`);
   console.log(`│ C Consolidador       │ ${String(usageC.tokensEntrada||0).padStart(8)} │ ${String(usageC.tokensSaida||0).padStart(8)} │ ${String(usageC.tokensTotal||0).padStart(15)} │`);
+  console.log(`│ D Verificador        │ ${String(usageD.tokensEntrada||0).padStart(8)} │ ${String(usageD.tokensSaida||0).padStart(8)} │ ${String(usageD.tokensTotal||0).padStart(15)} │`);
   console.log("├──────────────────────┼──────────┼──────────┼─────────────────┤");
   console.log(`│ TOTAL                │ ${String(totalInput).padStart(8)} │ ${String(totalOutput).padStart(8)} │ ${String(totalGeral).padStart(15)} │`);
   console.log("└──────────────────────┴──────────┴──────────┴─────────────────┘");
@@ -881,6 +1025,7 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
   console.log(`  A (llama-3.1-8b-instant):    U$ ${(custoA||0).toFixed(6)}  (R$ ${usdParaBrl(custoA||0)})`);
   console.log(`  B (llama-3.3-70b-versatile): U$ ${(custoB||0).toFixed(6)}  (R$ ${usdParaBrl(custoB||0)})`);
   console.log(`  C (llama-3.3-70b-versatile): U$ ${(custoC||0).toFixed(6)}  (R$ ${usdParaBrl(custoC||0)})`);
+  console.log(`  D (llama-3.3-70b-versatile): U$ ${(custoD||0).toFixed(6)}  (R$ ${usdParaBrl(custoD||0)})`);
   console.log(`  TOTAL REAL:                  U$ ${custoReal.toFixed(6)}  (R$ ${usdParaBrl(custoReal)})`);
   console.log("\n  Projeção: se usasse modelo pago para todas as chamadas:");
   console.log(`  claude-sonnet-4-5:   ${projetarCusto("claude-sonnet-4-5")}`);
