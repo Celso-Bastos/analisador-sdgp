@@ -1,17 +1,20 @@
 // src/services/anthropicService.js
 //
-// Pipeline de 3 chamadas em chaves Groq independentes:
+// Pipeline de 4 chamadas em chaves Groq independentes:
 //
-//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 → llama-3.1-8b-instant  (6.000 TPM)
+//  CHAMADA 0 — Classificador     → GROQ_API_KEY_4 → llama-3.3-70b-versatile (6.000 TPM)
+//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 → llama-3.1-8b-instant    (6.000 TPM)
 //  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 → llama-3.3-70b-versatile (6.000 TPM)
 //  CHAMADA C — Consolidador      → GROQ_API_KEY_3 → llama-3.3-70b-versatile (6.000 TPM)
 //
-//  A + B rodam em paralelo (Promise.all) → sem overhead de tempo.
+//  0 roda primeiro → identifica cada documento do array recebido
+//  A + B rodam em paralelo após a classificação
 //  Cada chave deve ser de uma organização Groq diferente.
 //  O OCR é limpo antes de enviar — remove ruído sem perder dados relevantes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODELO_0 = "llama-3.3-70b-versatile";  // Classificador     — identifica documentos
 const MODELO_A = "llama-3.1-8b-instant";     // Perito Documental — cruzamento de dados
 const MODELO_B = "llama-3.3-70b-versatile";  // Perito Jurídico   — raciocínio legal
 const MODELO_C = "llama-3.3-70b-versatile";  // Consolidador      — síntese final
@@ -31,6 +34,16 @@ const LABELS = {
   dae:         "DAE Competência Atual",
   contrato:    "Contrato",
 };
+
+// ── MONTAGEM PARA CLASSIFICADOR ─────────────────────────────────────────────
+// Recebe array [{ nome, texto }] e monta texto numerado para o classificador
+
+function montarDocsParaClassificador(documentos) {
+  return documentos.map((d, i) => {
+    const textoLimpo = limparOCR(d.texto);
+    return `[DOC_${i + 1}] Nome do arquivo: "${d.nome}"\nConteúdo:\n${textoLimpo}`;
+  }).join("\n\n---\n\n");
+}
 
 // ── LIMPEZA DE OCR ───────────────────────────────────────────────────────────
 // Remove ruído do OCR preservando 100% das informações relevantes.
@@ -134,6 +147,53 @@ async function chamarGroq({ apiKey, modelo, systemPrompt, userMessage, maxTokens
     throw new Error(`[${label}] JSON inválido na resposta: ${raw.slice(0, 300)}`);
   }
 }
+
+// ── PROMPT 0 — CLASSIFICADOR ─────────────────────────────────────────────────
+// Recebe N documentos sem identificação e retorna objeto com chaves fixas
+
+const SYSTEM_0 = `
+Você é um CLASSIFICADOR DE DOCUMENTOS especializado no Seguro Defeso do Pescador Artesanal (SDGP).
+
+Você receberá N documentos numerados como [DOC_1], [DOC_2], etc.
+Cada documento tem o nome do arquivo e o conteúdo extraído por OCR.
+
+SEU ÚNICO PAPEL: identificar qual tipo de documento cada um é e retornar o mapeamento em JSON.
+
+━━━ TIPOS DE DOCUMENTOS POSSÍVEIS ━━━
+Use EXATAMENTE estes IDs (nada mais):
+
+  rg          → RG, CIN, Carteira de Identidade, CNH (como identidade)
+  rgp         → RGP, Registro Geral da Atividade Pesqueira, Carteira de Pescador
+  certificado → Certificado de Regularidade do Pescador
+  residencia  → Comprovante de Residência, conta de luz, água, declaração de residência
+  cadunico    → CadÚnico, Cadastro Único, formulário de cadastramento
+  receita     → Dados da Receita Federal, situação cadastral CPF, comprovante CPF
+  cnis        → CNIS, Cadastro Nacional de Informações Sociais, extrato previdenciário
+  reap2124    → REAP 2021, 2022, 2023 ou 2024, Relatório Anual de Exercício da Atividade Pesqueira (anos anteriores)
+  reap25      → REAP 2025, Relatório Anual de Exercício da Atividade Pesqueira (ano 2025)
+  dae         → DAE, Documento de Arrecadação do Empreendedor, guia de contribuição previdenciária
+  contrato    → Contrato de trabalho, contrato de prestação de serviços, CTPS
+
+━━━ REGRAS DE CLASSIFICAÇÃO ━━━
+1. Analise o nome do arquivo E o conteúdo para identificar
+2. Se um documento claramente for um tipo, mapeie-o
+3. Se não conseguir identificar com segurança → coloque o número em "nao_identificado"
+4. Se dois arquivos forem do mesmo tipo → mantenha o mais completo, coloque o outro em "duplicado"
+5. NUNCA invente IDs fora da lista acima
+
+━━━ SAÍDA OBRIGATÓRIA: JSON PURO, SEM MARKDOWN ━━━
+{
+  "rg": 1,
+  "cadunico": 2,
+  "reap25": 3,
+  "cnis": 4,
+  "nao_identificado": [5],
+  "duplicado": []
+}
+
+Os valores são os NÚMEROS dos documentos ([DOC_1] = 1, [DOC_2] = 2, etc.).
+Campos sem documento correspondente devem ser omitidos do JSON.
+`;
 
 // ── PROMPT A — PERITO DOCUMENTAL ─────────────────────────────────────────────
 // Papel exclusivo: cruzar os documentos entre si e detectar divergências internas
@@ -573,20 +633,58 @@ Gere entre 8 e 14 diretivas. Ordem obrigatória: críticos → atenções → co
 // ── FUNÇÃO PRINCIPAL ──────────────────────────────────────────────────────────
 
 async function analisarDocumentos(dados) {
-  const docsTexto = montarDocsTexto(dados.documentos);
+  // dados.documentos = [{ nome, texto }, ...]
 
-  const informados = Object.entries(dados.documentos)
-    .filter(([, v]) => v?.trim()?.length > 10)
-    .map(([k]) => k);
+  // ── CHAMADA 0 — CLASSIFICADOR ─────────────────────────────────────────────
+  console.log("[SDGP] Chamada 0 — Classificador (GROQ_API_KEY_4)");
+  console.log(`       → ${dados.documentos.length} documento(s) para classificar`);
 
+  const msgClassificador = `Classifique os seguintes documentos:
+
+${montarDocsParaClassificador(dados.documentos)}
+
+Retorne o JSON de classificação conforme as instruções.`;
+
+  const classificacao = await chamarGroq({
+    apiKey:       process.env.GROQ_API_KEY_4,
+    modelo:       MODELO_0,
+    systemPrompt: SYSTEM_0,
+    userMessage:  msgClassificador,
+    maxTokens:    500,
+    label:        "CLASSIFICADOR",
+  });
+
+  console.log("[SDGP] Classificação:", JSON.stringify(classificacao));
+
+  // Montar objeto de documentos classificados (chaves fixas)
   const todosIds = ["rg","rgp","certificado","residencia","cadunico","receita","cnis","reap2124","reap25","dae","contrato"];
-  const ausentes = todosIds.filter(d => !informados.includes(d));
+  const documentosClassificados = {};
+
+  for (const id of todosIds) {
+    const idx = classificacao[id];
+    if (idx != null && dados.documentos[idx - 1]) {
+      documentosClassificados[id] = dados.documentos[idx - 1].texto;
+    } else {
+      documentosClassificados[id] = "";
+    }
+  }
+
+  // Documentos não identificados — incluir como texto livre para o modelo
+  const naoIdentificados = (classificacao.nao_identificado || [])
+    .map(idx => dados.documentos[idx - 1]?.texto || "")
+    .filter(Boolean);
+
+  // Montar texto de docs para os peritos
+  const docsTexto = montarDocsTexto(documentosClassificados);
+
+  const informados = todosIds.filter(k => documentosClassificados[k]?.trim()?.length > 10);
+  const ausentes   = todosIds.filter(k => !informados.includes(k));
 
   const cabecalho = `PESCADOR: ${dados.nome}
 CPF: ${dados.cpf}
 DATA HOJE: ${new Date().toLocaleDateString("pt-BR")}
 DOCS PRESENTES: ${informados.map(k => LABELS[k]).join(", ") || "nenhum"}
-DOCS AUSENTES: ${ausentes.map(k => LABELS[k]).join(", ") || "nenhum"}`;
+DOCS AUSENTES: ${ausentes.map(k => LABELS[k]).join(", ") || "nenhum"}${naoIdentificados.length > 0 ? `\nDOCS NÃO IDENTIFICADOS: ${naoIdentificados.length} arquivo(s) não classificado(s)` : ""}`;
 
   const extras = dados.extras ? `\nINFORMAÇÕES ADICIONAIS: ${dados.extras}\n` : "";
 
@@ -735,7 +833,7 @@ Consolide os dois relatórios eliminando redundâncias, calcule o score e gere a
   console.log(`  gemini-2.0-flash:    ${projetarCusto("gemini-2.0-flash")}`);
   console.log(`\n  Score: ${consolidado.score} | Diretivas: ${consolidado.diretivas.length}\n`);
 
-  return consolidado;
+  return { ...consolidado, classificacao };
 }
 
 module.exports = { analisarDocumentos };

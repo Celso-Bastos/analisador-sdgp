@@ -18,23 +18,19 @@
     }
     body { font-family: var(--fonte-corpo); background: var(--cinza-100); color: var(--preto); min-height: 100vh; }
 
+    /* ── HEADER ── */
     .header { background: var(--azul); padding: 1.25rem 2rem; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 100; }
     .header-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
     .header h1 { font-family: var(--fonte-titulo); font-size: 17px; font-weight: 600; color: #fff; }
     .header p { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 1px; }
 
+    /* ── LAYOUT ── */
     .container { max-width: 860px; margin: 0 auto; padding: 2rem 1rem 4rem; }
     .secao { margin-bottom: 1.25rem; }
     .card { background: var(--branco); border: 1px solid var(--cinza-200); border-radius: 14px; padding: 1.5rem; }
     .secao-titulo { font-family: var(--fonte-titulo); font-size: 11px; font-weight: 600; color: var(--cinza-400); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; }
-    .grupo-titulo {
-      font-family: var(--fonte-titulo); font-size: 10px; font-weight: 700;
-      color: var(--azul-medio); text-transform: uppercase; letter-spacing: 0.08em;
-      margin: 18px 0 10px; padding-top: 14px;
-      border-top: 1px dashed var(--cinza-200);
-    }
-    .grupo-titulo:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
 
+    /* ── DADOS DO CLIENTE ── */
     .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media(max-width: 560px) { .row-2 { grid-template-columns: 1fr; } }
     .campo { display: flex; flex-direction: column; gap: 5px; }
@@ -42,27 +38,76 @@
     .campo input { font-family: var(--fonte-corpo); font-size: 14px; padding: 9px 12px; border: 1px solid var(--cinza-200); border-radius: 8px; background: var(--cinza-100); color: var(--preto); outline: none; transition: border-color 0.15s; }
     .campo input:focus { border-color: var(--azul-medio); box-shadow: 0 0 0 3px rgba(26,109,181,0.12); background: #fff; }
 
-    .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    @media(max-width: 560px) { .doc-grid { grid-template-columns: 1fr; } }
+    /* ── ZONA DE UPLOAD ── */
+    .upload-zona {
+      border: 2px dashed var(--cinza-200);
+      border-radius: 12px;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--cinza-100);
+      position: relative;
+    }
+    .upload-zona:hover, .upload-zona.drag-over {
+      border-color: var(--azul-medio);
+      background: var(--azul-claro);
+    }
+    .upload-zona input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icone { font-size: 32px; margin-bottom: 10px; }
+    .upload-titulo { font-family: var(--fonte-titulo); font-size: 15px; font-weight: 600; color: var(--preto); margin-bottom: 4px; }
+    .upload-sub { font-size: 12px; color: var(--cinza-400); line-height: 1.5; }
+    .upload-tipos { display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+    .upload-tipo-tag { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 99px; background: var(--cinza-200); color: var(--cinza-700); }
 
-    .doc-item { border: 1.5px dashed var(--cinza-200); border-radius: 10px; padding: 12px; background: var(--cinza-100); display: flex; flex-direction: column; gap: 6px; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
-    .doc-item:hover { border-color: var(--azul-medio); background: var(--azul-claro); }
-    .doc-item.carregado { border-color: var(--verde); border-style: solid; background: var(--verde-claro); }
-    .doc-item.processando { border-color: var(--azul-medio); border-style: solid; background: var(--azul-claro); }
-    .doc-item.erro { border-color: var(--vermelho); border-style: solid; background: var(--vermelho-claro); }
-    .doc-item input[type=file] { display: none; }
+    /* ── LISTA DE ARQUIVOS ── */
+    .arquivos-lista { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+    .arquivo-item {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--cinza-100); border: 1px solid var(--cinza-200);
+      border-radius: 10px; padding: 10px 14px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .arquivo-item.processando { border-color: var(--azul-medio); background: var(--azul-claro); }
+    .arquivo-item.concluido  { border-color: var(--verde);      background: var(--verde-claro); }
+    .arquivo-item.erro       { border-color: var(--vermelho);   background: var(--vermelho-claro); }
 
-    .doc-nome { font-family: var(--fonte-titulo); font-size: 13px; font-weight: 600; color: var(--preto); }
-    .doc-desc { font-size: 11px; color: var(--cinza-400); line-height: 1.4; }
-    .doc-status { font-size: 11px; font-weight: 500; margin-top: 2px; min-height: 16px; color: var(--cinza-400); }
-    .doc-item.carregado .doc-status { color: var(--verde); }
-    .doc-item.processando .doc-status { color: var(--azul-medio); }
-    .doc-item.erro .doc-status { color: var(--vermelho); }
-    .doc-upload-hint { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--azul-medio); margin-top: 4px; }
-    .doc-item.carregado .doc-upload-hint, .doc-item.processando .doc-upload-hint { display: none; }
-    .doc-spinner { display: none; width: 14px; height: 14px; border: 2px solid var(--cinza-200); border-top-color: var(--azul-medio); border-radius: 50%; animation: spin 0.7s linear infinite; }
-    .doc-item.processando .doc-spinner { display: inline-block; }
+    .arquivo-icone { font-size: 20px; flex-shrink: 0; }
+    .arquivo-info { flex: 1; min-width: 0; }
+    .arquivo-nome { font-size: 13px; font-weight: 500; color: var(--preto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .arquivo-status { font-size: 11px; margin-top: 2px; color: var(--cinza-400); }
+    .arquivo-item.processando .arquivo-status { color: var(--azul-medio); }
+    .arquivo-item.concluido  .arquivo-status  { color: var(--verde); }
+    .arquivo-item.erro       .arquivo-status  { color: var(--vermelho); }
 
+    .arquivo-remover {
+      background: none; border: none; cursor: pointer; padding: 4px; border-radius: 6px;
+      color: var(--cinza-400); font-size: 16px; line-height: 1;
+      transition: color 0.15s, background 0.15s; flex-shrink: 0;
+    }
+    .arquivo-remover:hover { color: var(--vermelho); background: var(--vermelho-claro); }
+    .arquivo-item.processando .arquivo-remover { pointer-events: none; opacity: 0.3; }
+
+    .spinner-mini {
+      width: 14px; height: 14px; flex-shrink: 0;
+      border: 2px solid var(--cinza-200); border-top-color: var(--azul-medio);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── CONTADOR ── */
+    .contador-wrap { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+    .contador { font-size: 12px; color: var(--cinza-400); }
+    .btn-limpar-tudo { font-size: 11px; color: var(--vermelho); background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+    .btn-limpar-tudo:hover { background: var(--vermelho-claro); }
+
+    /* ── PROGRESSO GERAL ── */
+    .progresso-geral { height: 3px; background: var(--cinza-200); border-radius: 2px; margin-bottom: 1.25rem; overflow: hidden; }
+    .progresso-barra { height: 100%; background: var(--azul-medio); border-radius: 2px; transition: width 0.4s ease; width: 0%; }
+
+    /* ── BOTÕES ── */
     .btn-analisar { width: 100%; padding: 14px; font-family: var(--fonte-titulo); font-size: 15px; font-weight: 600; border: none; border-radius: 10px; background: var(--azul); color: #fff; cursor: pointer; margin-top: 0.75rem; transition: background 0.15s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .btn-analisar:hover:not(:disabled) { background: var(--azul-medio); }
     .btn-analisar:active:not(:disabled) { transform: scale(0.99); }
@@ -70,15 +115,18 @@
     .btn-nova { width: 100%; padding: 12px; font-family: var(--fonte-titulo); font-size: 14px; font-weight: 600; border: 1px solid var(--cinza-200); border-radius: 10px; background: var(--branco); color: var(--cinza-700); cursor: pointer; margin-top: 0.5rem; }
     .btn-nova:hover { background: var(--cinza-100); }
 
+    /* ── LOADING ── */
     .loading-area { display: none; align-items: center; gap: 12px; padding: 1rem 0; }
     .loading-area.visivel { display: flex; }
     .spinner-grande { width: 22px; height: 22px; border: 2.5px solid var(--cinza-200); border-top-color: var(--azul); border-radius: 50%; animation: spin 0.75s linear infinite; }
     .loading-txt { font-size: 14px; color: var(--cinza-700); }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-etapa { font-size: 11px; color: var(--cinza-400); margin-top: 2px; }
 
+    /* ── ERRO ── */
     .erro-box { display: none; background: var(--vermelho-claro); border: 1px solid rgba(139,26,26,0.2); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--vermelho); margin-top: 10px; }
     .erro-box.visivel { display: block; }
 
+    /* ── RESULTADO ── */
     .resultado { display: none; }
     .resultado.visivel { display: block; }
 
@@ -91,6 +139,13 @@
     .barra-wrap { height: 7px; background: var(--cinza-200); border-radius: 999px; margin: 1rem 0 0.25rem; overflow: hidden; }
     .barra { height: 100%; border-radius: 999px; width: 0%; transition: width 1.2s cubic-bezier(.4,0,.2,1); }
 
+    /* ── CLASSIFICAÇÃO ── */
+    .classificacao-resumo { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .class-tag { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 99px; }
+    .class-tag.identificado { background: var(--verde-claro); color: var(--verde); }
+    .class-tag.nao-identificado { background: var(--amarelo-claro); color: var(--amarelo); }
+
+    /* ── DIRETIVAS ── */
     .diretivas { display: flex; flex-direction: column; gap: 8px; }
     .diretiva { border-radius: 9px; padding: 11px 14px; border-left: 3px solid; }
     .diretiva.ok { background: var(--verde-claro); border-color: var(--verde); }
@@ -101,10 +156,6 @@
     .diretiva.atencao .dir-tag { color: var(--amarelo); }
     .diretiva.critico .dir-tag { color: var(--vermelho); }
     .dir-texto { font-size: 13px; line-height: 1.6; }
-
-    .progresso-geral { height: 3px; background: var(--cinza-200); border-radius: 2px; margin-bottom: 1.25rem; overflow: hidden; }
-    .progresso-barra { height: 100%; background: var(--azul-medio); border-radius: 2px; transition: width 0.4s ease; width: 0%; }
-    .contador { font-size: 12px; color: var(--cinza-400); margin-top: 10px; text-align: right; }
   </style>
 </head>
 <body>
@@ -120,46 +171,86 @@
 <div class="container">
   <div class="progresso-geral"><div class="progresso-barra" id="progresso-barra"></div></div>
 
+  <!-- ── FORMULÁRIO ── -->
   <div id="pagina-form">
+
+    <!-- Dados do cliente -->
     <div class="secao">
       <div class="card">
         <div class="secao-titulo">Dados do cliente</div>
         <div class="row-2">
-          <div class="campo"><label>Nome completo</label><input type="text" id="nome" placeholder="Ex: João da Silva" autocomplete="off" /></div>
-          <div class="campo"><label>CPF</label><input type="text" id="cpf" placeholder="000.000.000-00" maxlength="14" autocomplete="off" /></div>
+          <div class="campo">
+            <label>Nome completo</label>
+            <input type="text" id="nome" placeholder="Ex: João da Silva" autocomplete="off" />
+          </div>
+          <div class="campo">
+            <label>CPF</label>
+            <input type="text" id="cpf" placeholder="000.000.000-00" maxlength="14" autocomplete="off" />
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- Upload de documentos -->
     <div class="secao">
       <div class="card">
-        <div class="secao-titulo">Documentos — clique para fazer upload (PDF ou imagem)</div>
+        <div class="secao-titulo">Documentos — selecione todos de uma vez ou adicione aos poucos</div>
 
-        <div class="grupo-titulo">Identificação e Cadastro</div>
-        <div class="doc-grid" id="grid-identificacao"></div>
+        <!-- Zona de drop -->
+        <div class="upload-zona" id="upload-zona"
+          ondragover="dragOver(event)"
+          ondragleave="dragLeave(event)"
+          ondrop="drop(event)">
+          <input type="file" id="input-arquivos" multiple accept=".pdf,image/*"
+            onchange="adicionarArquivos(this.files)" />
+          <div class="upload-icone">📂</div>
+          <div class="upload-titulo">Clique para selecionar ou arraste os arquivos aqui</div>
+          <div class="upload-sub">
+            Você pode enviar todos os documentos de uma vez.<br>
+            O sistema identificará automaticamente cada um.
+          </div>
+          <div class="upload-tipos">
+            <span class="upload-tipo-tag">RG / CIN</span>
+            <span class="upload-tipo-tag">CadÚnico</span>
+            <span class="upload-tipo-tag">RGP</span>
+            <span class="upload-tipo-tag">REAP</span>
+            <span class="upload-tipo-tag">CNIS</span>
+            <span class="upload-tipo-tag">DAE</span>
+            <span class="upload-tipo-tag">+ outros</span>
+          </div>
+        </div>
 
-        <div class="grupo-titulo">Atividade Pesqueira</div>
-        <div class="doc-grid" id="grid-pesca"></div>
+        <!-- Lista de arquivos carregados -->
+        <div class="arquivos-lista" id="arquivos-lista"></div>
 
-        <div class="grupo-titulo">REAP — Relatório Anual de Exercício da Atividade Pesqueira</div>
-        <div class="doc-grid" id="grid-reap"></div>
+        <!-- Contador + limpar -->
+        <div class="contador-wrap" id="contador-wrap" style="display:none">
+          <span class="contador" id="contador">0 arquivos prontos</span>
+          <button class="btn-limpar-tudo" onclick="limparTudo()">Limpar tudo</button>
+        </div>
 
-        <div class="grupo-titulo">Previdência e Financeiro</div>
-        <div class="doc-grid" id="grid-previdencia"></div>
-
-        <div class="contador" id="contador">0 de 11 documentos enviados</div>
       </div>
     </div>
 
-    <button class="btn-analisar" id="btn-analisar" onclick="analisar()">Analisar documentos</button>
+    <button class="btn-analisar" id="btn-analisar" onclick="analisar()">
+      🔍 Analisar documentos
+    </button>
+
     <div class="erro-box" id="erro-box"></div>
+
     <div class="loading-area" id="loading-area">
       <div class="spinner-grande"></div>
-      <span class="loading-txt" id="loading-txt">Processando...</span>
+      <div>
+        <div class="loading-txt" id="loading-txt">Processando...</div>
+        <div class="loading-etapa" id="loading-etapa"></div>
+      </div>
     </div>
-  </div>
 
+  </div><!-- fim pagina-form -->
+
+  <!-- ── RESULTADO ── -->
   <div class="resultado" id="resultado">
+
     <div class="secao">
       <div class="card">
         <div class="secao-titulo">Score de regularização</div>
@@ -176,62 +267,98 @@
         <div class="barra-wrap"><div class="barra" id="barra"></div></div>
       </div>
     </div>
+
+    <div class="secao">
+      <div class="card">
+        <div class="secao-titulo">Documentos identificados pela IA</div>
+        <div class="classificacao-resumo" id="classificacao-resumo"></div>
+      </div>
+    </div>
+
     <div class="secao">
       <div class="card">
         <div class="secao-titulo">Direcionamentos e pendências</div>
         <div class="diretivas" id="diretivas"></div>
       </div>
     </div>
+
     <button class="btn-nova" onclick="novaAnalise()">← Nova análise</button>
   </div>
-</div>
+
+</div><!-- fim container -->
 
 <script>
-const GRUPOS = {
-  "grid-identificacao": [
-    { id: "rg",        nome: "RG / CIN",                    desc: "Documento de identidade" },
-    { id: "cadunico",  nome: "CadÚnico",                    desc: "Cadastro Único para Programas Sociais" },
-    { id: "receita",   nome: "Dados da Receita Federal",    desc: "Situação cadastral do CPF" },
-    { id: "residencia",nome: "Declaração de Residência",    desc: "Mínimo 1 ano — conta de luz, água ou declaração" },
-  ],
-  "grid-pesca": [
-    { id: "rgp",         nome: "RGP",          desc: "Registro Geral da Atividade Pesqueira" },
-    { id: "certificado", nome: "Certificado",   desc: "Certificado de Regularidade do Pescador" },
-  ],
-  "grid-reap": [
-    { id: "reap2124", nome: "REAP 2021–2024", desc: "Relatório simplificado dos anos 2021 a 2024" },
-    { id: "reap25",   nome: "REAP 2025",      desc: "Relatório 2025 — obrigatório para concessão em 2026" },
-  ],
-  "grid-previdencia": [
-    { id: "cnis",     nome: "CNIS",                     desc: "Cadastro Nacional de Informações Sociais" },
-    { id: "dae",      nome: "DAE Competência Atual",    desc: "Documento de arrecadação — competência vigente" },
-    { id: "contrato", nome: "Contrato",                  desc: "Contrato de trabalho ou prestação de serviços (se houver)" },
-  ],
-};
+// ── ESTADO ──────────────────────────────────────────────────────────────────
+// Cada entrada: { id, nome, tipo, base64, texto, estado }
+const arquivos = [];
+let proximoId = 0;
 
-const TODOS_DOCS = Object.values(GRUPOS).flat();
-const textos = {};
+// ── MÁSCARA CPF ──────────────────────────────────────────────────────────────
+document.getElementById("cpf").addEventListener("input", function () {
+  let v = this.value.replace(/\D/g, "");
+  if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, "$1.$2.$3-$4");
+  else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, "$1.$2.$3");
+  else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, "$1.$2");
+  this.value = v;
+});
 
-function renderGrupos() {
-  for (const [gridId, docs] of Object.entries(GRUPOS)) {
-    document.getElementById(gridId).innerHTML = docs.map(d => `
-      <div class="doc-item" id="item-${d.id}" onclick="document.getElementById('file-${d.id}').click()">
-        <input type="file" id="file-${d.id}" accept=".pdf,image/*" onchange="processarArquivo('${d.id}', this)" />
-        <div class="doc-nome">${d.nome}</div>
-        <div class="doc-desc">${d.desc}</div>
-        <div class="doc-upload-hint">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Clique para enviar
-        </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div class="doc-spinner"></div>
-          <div class="doc-status" id="status-${d.id}">Aguardando arquivo</div>
-        </div>
-      </div>
-    `).join("");
-  }
+// ── DRAG AND DROP ─────────────────────────────────────────────────────────────
+function dragOver(e) {
+  e.preventDefault();
+  document.getElementById("upload-zona").classList.add("drag-over");
+}
+function dragLeave(e) {
+  document.getElementById("upload-zona").classList.remove("drag-over");
+}
+function drop(e) {
+  e.preventDefault();
+  document.getElementById("upload-zona").classList.remove("drag-over");
+  adicionarArquivos(e.dataTransfer.files);
 }
 
+// ── ADICIONAR ARQUIVOS ───────────────────────────────────────────────────────
+async function adicionarArquivos(fileList) {
+  const novos = Array.from(fileList);
+  if (!novos.length) return;
+
+  for (const file of novos) {
+    const id = proximoId++;
+    const entrada = { id, nome: file.name, tipo: file.type, texto: null, estado: "processando" };
+    arquivos.push(entrada);
+    renderItem(entrada);
+    atualizarContador();
+
+    try {
+      // 1. Converter para base64
+      const base64 = await toBase64(file);
+
+      // 2. Enviar para OCR
+      const res = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64, tipo: file.type }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.erro || "Erro no OCR");
+
+      entrada.texto = data.texto;
+      entrada.estado = "concluido";
+      atualizarItem(entrada, `✓ Texto extraído — ${data.texto.length} caracteres`);
+
+    } catch (err) {
+      entrada.estado = "erro";
+      atualizarItem(entrada, `Erro: ${err.message}`);
+    }
+
+    atualizarContador();
+    atualizarProgresso();
+  }
+
+  // Limpar o input para permitir re-upload do mesmo arquivo
+  document.getElementById("input-arquivos").value = "";
+}
+
+// ── BASE64 ───────────────────────────────────────────────────────────────────
 function toBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -241,72 +368,105 @@ function toBase64(file) {
   });
 }
 
-async function processarArquivo(id, input) {
-  const file = input.files[0];
-  if (!file) return;
-  setDocEstado(id, "processando", "Enviando para o servidor...");
-  try {
-    const base64 = await toBase64(file);
-    const res = await fetch("/api/ocr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ base64, tipo: file.type }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao extrair texto.");
-    textos[id] = data.texto;
-    setDocEstado(id, "carregado", `✓ ${file.name}`);
-    atualizarContador();
-  } catch (err) {
-    setDocEstado(id, "erro", err.message);
-    delete textos[id];
-    atualizarContador();
+// ── RENDER ITEM ───────────────────────────────────────────────────────────────
+function renderItem(entrada) {
+  const lista = document.getElementById("arquivos-lista");
+  const ext = entrada.nome.split(".").pop().toLowerCase();
+  const icone = ext === "pdf" ? "📄" : "🖼️";
+
+  const div = document.createElement("div");
+  div.className = "arquivo-item processando";
+  div.id = `arquivo-${entrada.id}`;
+  div.innerHTML = `
+    <span class="arquivo-icone">${icone}</span>
+    <div class="arquivo-info">
+      <div class="arquivo-nome" title="${entrada.nome}">${entrada.nome}</div>
+      <div class="arquivo-status" id="status-${entrada.id}">Extraindo texto...</div>
+    </div>
+    <div class="spinner-mini" id="spinner-${entrada.id}"></div>
+    <button class="arquivo-remover" onclick="removerArquivo(${entrada.id})" title="Remover">×</button>
+  `;
+  lista.appendChild(div);
+  document.getElementById("contador-wrap").style.display = "flex";
+}
+
+function atualizarItem(entrada, statusMsg) {
+  const el = document.getElementById(`arquivo-${entrada.id}`);
+  const spinner = document.getElementById(`spinner-${entrada.id}`);
+  if (!el) return;
+  el.className = `arquivo-item ${entrada.estado}`;
+  document.getElementById(`status-${entrada.id}`).textContent = statusMsg;
+  if (spinner) spinner.style.display = "none";
+}
+
+// ── REMOVER ARQUIVO ───────────────────────────────────────────────────────────
+function removerArquivo(id) {
+  const idx = arquivos.findIndex(a => a.id === id);
+  if (idx !== -1) arquivos.splice(idx, 1);
+  const el = document.getElementById(`arquivo-${id}`);
+  if (el) el.remove();
+  atualizarContador();
+  atualizarProgresso();
+  if (arquivos.length === 0) {
+    document.getElementById("contador-wrap").style.display = "none";
   }
 }
 
-function setDocEstado(id, estado, msg) {
-  document.getElementById("item-" + id).className = "doc-item " + estado;
-  document.getElementById("status-" + id).textContent = msg;
+// ── LIMPAR TUDO ───────────────────────────────────────────────────────────────
+function limparTudo() {
+  arquivos.length = 0;
+  document.getElementById("arquivos-lista").innerHTML = "";
+  document.getElementById("contador-wrap").style.display = "none";
+  document.getElementById("progresso-barra").style.width = "0%";
+  setErro("");
 }
 
+// ── CONTADOR ──────────────────────────────────────────────────────────────────
 function atualizarContador() {
-  const n = Object.keys(textos).length;
-  const total = TODOS_DOCS.length;
-  document.getElementById("contador").textContent = `${n} de ${total} documentos enviados`;
-  document.getElementById("progresso-barra").style.width = Math.round((n / total) * 60) + "%";
+  const prontos = arquivos.filter(a => a.estado === "concluido").length;
+  const total   = arquivos.length;
+  const erros   = arquivos.filter(a => a.estado === "erro").length;
+  let txt = `${prontos} de ${total} ${total === 1 ? "arquivo pronto" : "arquivos prontos"}`;
+  if (erros > 0) txt += ` · ${erros} com erro`;
+  document.getElementById("contador").textContent = txt;
 }
 
-document.getElementById("cpf").addEventListener("input", function () {
-  let v = this.value.replace(/\D/g, "");
-  if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, "$1.$2.$3-$4");
-  else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, "$1.$2.$3");
-  else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, "$1.$2");
-  this.value = v;
-});
+function atualizarProgresso() {
+  const prontos = arquivos.filter(a => a.estado === "concluido").length;
+  const total   = arquivos.length || 1;
+  const pct     = Math.round((prontos / total) * 60);
+  document.getElementById("progresso-barra").style.width = pct + "%";
+}
 
+// ── HELPERS DE UI ─────────────────────────────────────────────────────────────
 function setErro(msg) {
   const el = document.getElementById("erro-box");
   msg ? (el.textContent = msg, el.classList.add("visivel")) : el.classList.remove("visivel");
 }
 
-function setLoading(v, msg) {
+function setLoading(v, msg, etapa) {
   document.getElementById("loading-area").classList.toggle("visivel", v);
   document.getElementById("btn-analisar").disabled = v;
-  if (msg) document.getElementById("loading-txt").textContent = msg;
+  if (msg)   document.getElementById("loading-txt").textContent   = msg;
+  if (etapa !== undefined) document.getElementById("loading-etapa").textContent = etapa;
 }
 
+// ── ANALISAR ──────────────────────────────────────────────────────────────────
 async function analisar() {
   setErro("");
+
   const nome = document.getElementById("nome").value.trim();
-  const cpf = document.getElementById("cpf").value.trim();
+  const cpf  = document.getElementById("cpf").value.trim();
   if (!nome || !cpf) { setErro("Preencha o nome e CPF antes de analisar."); return; }
-  if (Object.keys(textos).length === 0) { setErro("Faça upload de pelo menos um documento."); return; }
 
-  const documentos = {};
-  for (const d of TODOS_DOCS) documentos[d.id] = textos[d.id] || "";
+  const prontos = arquivos.filter(a => a.estado === "concluido");
+  if (prontos.length === 0) { setErro("Adicione pelo menos um documento com texto extraído."); return; }
 
-  setLoading(true, "Extraindo dados dos documentos...");
-  document.getElementById("progresso-barra").style.width = "75%";
+  // Montar array de textos para enviar
+  const documentos = prontos.map(a => ({ nome: a.nome, texto: a.texto }));
+
+  setLoading(true, "Classificando documentos...", "A IA está identificando cada arquivo");
+  document.getElementById("progresso-barra").style.width = "65%";
 
   try {
     const response = await fetch("/api/analisar", {
@@ -314,11 +474,21 @@ async function analisar() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nome, cpf, documentos }),
     });
-    setLoading(true, "Aplicando checklist completo...");
+
+    setLoading(true, "Analisando conformidade...", "Perito Documental + Perito Jurídico em paralelo");
+    document.getElementById("progresso-barra").style.width = "80%";
+
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.erros?.[0] || "Erro ao processar.");
-    document.getElementById("progresso-barra").style.width = "100%";
-    renderResultado(data.resultado);
+
+    setLoading(true, "Consolidando resultado...", "Calculando score final");
+    document.getElementById("progresso-barra").style.width = "95%";
+
+    setTimeout(() => {
+      document.getElementById("progresso-barra").style.width = "100%";
+      renderResultado(data.resultado, data.classificacao);
+    }, 600);
+
   } catch (err) {
     setErro("Erro: " + err.message);
     document.getElementById("progresso-barra").style.width = "60%";
@@ -327,12 +497,21 @@ async function analisar() {
   }
 }
 
-function renderResultado(r) {
+// ── RENDERIZAR RESULTADO ──────────────────────────────────────────────────────
+function renderResultado(r, classificacao) {
   const score = Math.max(0, Math.min(100, Math.round(r.score)));
+
   let cor, titulo;
-  if (score >= 80) { cor = { borda: "#1A5C2A", texto: "#1A5C2A", barra: "#2E8B47" }; titulo = "Alta probabilidade de regularização"; }
-  else if (score >= 50) { cor = { borda: "#7A4F00", texto: "#7A4F00", barra: "#C4830A" }; titulo = "Regularização parcial — pendências importantes"; }
-  else { cor = { borda: "#8B1A1A", texto: "#8B1A1A", barra: "#C0392B" }; titulo = "Situação crítica — regularização improvável"; }
+  if (score >= 80) {
+    cor = { borda: "#1A5C2A", texto: "#1A5C2A", barra: "#2E8B47" };
+    titulo = "Alta probabilidade de regularização";
+  } else if (score >= 50) {
+    cor = { borda: "#7A4F00", texto: "#7A4F00", barra: "#C4830A" };
+    titulo = "Regularização parcial — pendências importantes";
+  } else {
+    cor = { borda: "#8B1A1A", texto: "#8B1A1A", barra: "#C0392B" };
+    titulo = "Situação crítica — regularização improvável";
+  }
 
   document.getElementById("score-circulo").style.borderColor = cor.borda;
   document.getElementById("score-num").style.color = cor.texto;
@@ -344,6 +523,32 @@ function renderResultado(r) {
   barra.style.background = cor.barra;
   setTimeout(() => { barra.style.width = score + "%"; }, 100);
 
+  // Classificação de documentos
+  if (classificacao) {
+    const LABELS = {
+      rg: "RG/CIN", rgp: "RGP", certificado: "Certificado", residencia: "Comprovante de Residência",
+      cadunico: "CadÚnico", receita: "Receita Federal", cnis: "CNIS",
+      reap2124: "REAP 2021–2024", reap25: "REAP 2025", dae: "DAE", contrato: "Contrato"
+    };
+    const wrap = document.getElementById("classificacao-resumo");
+    wrap.innerHTML = "";
+    for (const [id, label] of Object.entries(LABELS)) {
+      if (classificacao[id]) {
+        const tag = document.createElement("span");
+        tag.className = "class-tag identificado";
+        tag.textContent = "✓ " + label;
+        wrap.appendChild(tag);
+      }
+    }
+    if (classificacao.nao_identificado?.length > 0) {
+      const tag = document.createElement("span");
+      tag.className = "class-tag nao-identificado";
+      tag.textContent = `⚠ ${classificacao.nao_identificado.length} não identificado(s)`;
+      wrap.appendChild(tag);
+    }
+  }
+
+  // Diretivas
   const tagMap = { ok: "Conforme", atencao: "Atenção", critico: "Pendência crítica" };
   document.getElementById("diretivas").innerHTML = (r.diretivas || []).map(d => `
     <div class="diretiva ${d.tipo}">
@@ -357,23 +562,16 @@ function renderResultado(r) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+// ── NOVA ANÁLISE ──────────────────────────────────────────────────────────────
 function novaAnalise() {
-  for (const k of Object.keys(textos)) delete textos[k];
-  for (const d of TODOS_DOCS) {
-    setDocEstado(d.id, "", "Aguardando arquivo");
-    document.getElementById("file-" + d.id).value = "";
-  }
+  limparTudo();
+  proximoId = 0;
   document.getElementById("nome").value = "";
   document.getElementById("cpf").value = "";
   document.getElementById("resultado").classList.remove("visivel");
   document.getElementById("pagina-form").style.display = "block";
-  document.getElementById("progresso-barra").style.width = "0%";
-  document.getElementById("contador").textContent = `0 de ${TODOS_DOCS.length} documentos enviados`;
-  setErro("");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
-
-renderGrupos();
 </script>
 </body>
 </html>

@@ -1,4 +1,7 @@
 // src/validators/analisarValidator.js
+// Aceita payload com array de documentos (novo formato)
+// { nome, cpf, documentos: [{ nome: "arquivo.pdf", texto: "..." }, ...] }
+
 function sanitizar(texto, max = 50000) {
   if (typeof texto !== "string") return "";
   return texto.replace(/<[^>]*>/g, "").trim().slice(0, max);
@@ -22,28 +25,32 @@ function validarCPF(cpf) {
 function validarPayload(body) {
   const erros = [];
 
+  // Nome
   const nome = sanitizar(body.nome || "", 200);
   if (!nome || nome.length < 3) erros.push("Nome inválido ou ausente.");
 
+  // CPF
   const cpf = sanitizar(body.cpf || "", 20);
   if (!cpf) erros.push("CPF ausente.");
   else if (!validarCPF(cpf)) erros.push("CPF inválido.");
 
-  const campos = [
-    "rg", "rgp", "certificado", "residencia", "cadunico",
-    "receita", "cnis", "reap2124", "reap25", "dae", "contrato"
-  ];
-
-  const documentos = {};
-  let algum = false;
-
-  for (const campo of campos) {
-    const val = sanitizar(body.documentos?.[campo] || "", 50000);
-    documentos[campo] = val;
-    if (val) algum = true;
+  // Documentos — agora é um array de { nome, texto }
+  const raw = body.documentos;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    erros.push("Nenhum documento enviado.");
+    return { valido: false, erros, dados: null };
   }
 
-  if (!algum) erros.push("Preencha pelo menos um documento.");
+  const documentos = raw
+    .filter(d => d && typeof d.texto === "string" && d.texto.trim().length > 10)
+    .map(d => ({
+      nome:  sanitizar(d.nome  || "documento", 200),
+      texto: sanitizar(d.texto || "",          50000),
+    }));
+
+  if (documentos.length === 0) {
+    erros.push("Nenhum documento com texto válido encontrado.");
+  }
 
   const extras = sanitizar(body.extras || "", 3000);
 
