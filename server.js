@@ -1,15 +1,31 @@
 // server.js
 require("dotenv").config();
 
-const express    = require("express");
-const cors       = require("cors");
-const helmet     = require("helmet");
-const rateLimit  = require("express-rate-limit");
-const apiRoutes  = require("./src/routes/api");
+const express   = require("express");
+const cors      = require("cors");
+const helmet    = require("helmet");
+const rateLimit = require("express-rate-limit");
+const apiRoutes = require("./src/routes/api");
+const { verificarJWT } = require("./src/middleware/auth");
 
 const app      = express();
 const PORT     = process.env.PORT     || 3000;
 const NODE_ENV = process.env.NODE_ENV || "development";
+
+// ── VALIDAÇÃO DE VARIÁVEIS OBRIGATÓRIAS ───────────────────────────────────────
+const VARS_OBRIGATORIAS = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_REDIRECT_URI",
+  "JWT_SECRET",
+  "EMAILS_AUTORIZADOS",
+];
+const ausentes = VARS_OBRIGATORIAS.filter(v => !process.env[v]);
+if (ausentes.length > 0) {
+  console.error(`\n❌ Variáveis de ambiente ausentes: ${ausentes.join(", ")}`);
+  console.error("   Configure o .env antes de iniciar.\n");
+  process.exit(1);
+}
 
 // ── TRUST PROXY (obrigatório no Render) ───────────────────────────────────────
 app.set("trust proxy", 1);
@@ -24,17 +40,16 @@ app.use(cors({ origin: true }));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: false, limit: "20mb" }));
 
-// ── RATE LIMIT GLOBAL (todas as rotas) ────────────────────────────────────────
+// ── RATE LIMIT GLOBAL ─────────────────────────────────────────────────────────
 app.use(rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
+  windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, erros: ["Muitas requisições. Aguarde e tente novamente."] },
 }));
 
-// ── RATE LIMIT ESPECÍFICO — /api/analisar ─────────────────────────────────────
-// Máximo 3 análises por minuto por IP
+// ── RATE LIMIT — /api/analisar ────────────────────────────────────────────────
 app.use("/api/analisar", rateLimit({
   windowMs: 60 * 1000,
   max: 3,
@@ -43,8 +58,7 @@ app.use("/api/analisar", rateLimit({
   message: { ok: false, erros: ["Muitas análises em pouco tempo. Aguarde 1 minuto."] },
 }));
 
-// ── RATE LIMIT ESPECÍFICO — /api/ocr ─────────────────────────────────────────
-// Máximo 20 uploads por minuto por IP
+// ── RATE LIMIT — /api/ocr ─────────────────────────────────────────────────────
 app.use("/api/ocr", rateLimit({
   windowMs: 60 * 1000,
   max: 20,
@@ -53,69 +67,28 @@ app.use("/api/ocr", rateLimit({
   message: { ok: false, erros: ["Muitos uploads em pouco tempo. Aguarde 1 minuto."] },
 }));
 
-// ── AUTENTICAÇÃO POR API KEY ──────────────────────────────────────────────────
-// Protege todas as rotas /api exceto /api/health
-// Configure ACCESS_KEY no .env — distribua apenas para usuários autorizados
-//
-// O cliente deve enviar o header: X-Access-Key: <valor do ACCESS_KEY>
-//
-function autenticar(req, res, next) {
-  // Health check é público — não exige chave
-  if (req.path === "/health") return next();
+// ── RATE LIMIT — /api/auth ────────────────────────────────────────────────────
+app.use("/api/auth", rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, erros: ["Muitas tentativas de login. Aguarde 15 minutos."] },
+}));
 
-  const ACCESS_KEY = process.env.ACCESS_KEY;
-
-  // Se ACCESS_KEY não estiver configurada, bloquear em produção, liberar em dev
-  if (!ACCESS_KEY) {
-    if (NODE_ENV === "production") {
-      return res.status(500).json({ ok: false, erros: ["Servidor mal configurado — ACCESS_KEY ausente."] });
-    }
-    console.warn("[AUTH] ACCESS_KEY não configurada — modo development, acesso liberado.");
-    return next();
-  }
-
-  const chaveEnviada = req.headers["x-access-key"];
-
-  if (!chaveEnviada) {
-    return res.status(401).json({ ok: false, erros: ["Acesso não autorizado — chave de acesso ausente."] });
-  }
-
-  // Comparação de tempo constante para evitar timing attacks
-  if (!seguroIgual(chaveEnviada, ACCESS_KEY)) {
-    console.warn(`[AUTH] Tentativa com chave inválida — IP: ${req.ip} — ${new Date().toISOString()}`);
-    return res.status(401).json({ ok: false, erros: ["Acesso não autorizado — chave de acesso inválida."] });
-  }
-
-  next();
-}
-
-// Comparação em tempo constante — evita que um atacante descubra a chave
-// medindo o tempo de resposta (timing attack)
-function seguroIgual(a, b) {
-  if (a.length !== b.length) return false;
-  let resultado = 0;
-  for (let i = 0; i < a.length; i++) {
-    resultado |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return resultado === 0;
-}
-
-// ── STATIC + ROTAS ────────────────────────────────────────────────────────────
+// ── STATIC ────────────────────────────────────────────────────────────────────
 app.use(express.static("public"));
 
-// Aplicar autenticação em todas as rotas /api
-app.use("/api", autenticar, apiRoutes);
+// ── AUTENTICAÇÃO JWT + ROTAS ──────────────────────────────────────────────────
+app.use("/api", verificarJWT, apiRoutes);
 
 // ── ERROR HANDLER GLOBAL ──────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error("[Erro global]", err.message);
-  if (err.message?.startsWith("CORS:")) {
-    return res.status(403).json({ ok: false, erros: [err.message] });
-  }
   res.status(500).json({ ok: false, erros: ["Erro interno do servidor."] });
 });
 
-// ── 404 — SEMPRE O ÚLTIMO ─────────────────────────────────────────────────────
+// ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ ok: false, erros: ["Rota não encontrada."] });
 });
@@ -125,6 +98,7 @@ app.listen(PORT, () => {
   console.log(`\n🐟 Analisador SDGP rodando`);
   console.log(`   Ambiente  : ${NODE_ENV}`);
   console.log(`   Porta     : ${PORT}`);
-  console.log(`   Auth      : ${process.env.ACCESS_KEY ? "✓ ACCESS_KEY configurada" : "⚠ ACCESS_KEY ausente"}`);
+  console.log(`   Auth      : Google OAuth 2.0`);
+  console.log(`   Autorizado: ${process.env.EMAILS_AUTORIZADOS}`);
   console.log(`   Health    : http://localhost:${PORT}/api/health\n`);
 });
