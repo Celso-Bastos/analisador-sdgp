@@ -358,8 +358,15 @@ Compare com: Receita Federal · RGP · CNIS · REAP 2021–2024 · REAP 2025
 → Divergência de bairro/logradouro = ATENÇÃO
 → Ausência de endereço em documento que deveria conter = ATENÇÃO
 
+ATENÇÃO: Ao comparar endereços no RGP, ignore completamente campos de órgão emissor
+como "MPA", "SSP", "DETRAN", "IBAMA", "MTE" — esses são identificações institucionais,
+NÃO são endereços do pescador. Compare apenas rua, bairro, município e estado.
+
 [C4] DATAS E VALIDADES
-- Data de emissão do RGP (verificar se existe e se é coerente com o tempo de inscrição)
+- Data de emissão do RGP: verificar se existe. ATENÇÃO: a data de EMISSÃO do documento
+  pode ser muito posterior à data de INSCRIÇÃO original — isso é completamente normal,
+  pois o documento pode ter sido reemitido, renovado ou substituído. NÃO reportar
+  diferença entre data de emissão e data de inscrição como divergência.
 - Data de emissão do Certificado de Regularidade (verificar vencimento)
 - Período coberto pelo REAP 2021–2024 (todos os anos 2021, 2022, 2023 e 2024 devem constar)
 - REAP 2025 — verificar se o ano de 2025 está declarado
@@ -368,7 +375,10 @@ Compare com: Receita Federal · RGP · CNIS · REAP 2021–2024 · REAP 2025
 
 [C5] CONSISTÊNCIA DO REAP vs. OUTROS DOCUMENTOS
 Compare as informações declaradas no REAP com os outros documentos:
-- Município de pesca declarado no REAP vs. município de residência no CadÚnico (coerência geográfica)
+- Município de pesca declarado no REAP vs. município de residência no CadÚnico:
+  É NORMAL e ESPERADO que o pescador pesque no mesmo município onde reside.
+  Município de pesca IGUAL ao município de residência = CONFORME, não reportar como divergência.
+  Só reportar se os municípios forem DIFERENTES e essa diferença for geograficamente incoerente.
 - Espécies e petrechos declarados no REAP vs. categoria no RGP
 - Dados do pescador no REAP (nome, CPF, RGP) vs. demais documentos
 
@@ -418,10 +428,21 @@ Isso força um raciocínio explícito que melhora a qualidade das divergências 
       "tipo": "critico|atencao|ok",
       "categoria": "C1|C2|C3|C4|C5|C6|C7",
       "titulo": "título curto",
-      "detalhe": "descrição precisa com valores reais encontrados nos documentos"
+      "detalhe": "OBRIGATÓRIO seguir este formato para divergências reais:\n📄 Documento 1 — [NOME DO DOCUMENTO]: [VALOR ENCONTRADO]\n📄 Documento 2 — [NOME DO DOCUMENTO]: [VALOR ENCONTRADO]\n⚠ Divergência: [EXPLICAÇÃO CLARA DO QUE DIFERE]\n✅ Ação necessária: [O QUE O PESCADOR DEVE FAZER]\n\nPara itens CONFORMES usar formato simples: [CAMPO] verificado em [DOCUMENTOS] — sem divergências."
     }
   ]
 }
+
+EXEMPLOS DE FORMATO CORRETO:
+
+Divergência de nome (critico):
+"detalhe": "📄 RG/CIN — Nome: JOÃO DA SILVA SANTOS\n📄 CadÚnico — Nome: JOÃO SILVA SANTOS\n⚠ Divergência: sobrenome 'DA' ausente no CadÚnico.\n✅ Ação necessária: corrigir o nome no CadÚnico para que seja idêntico ao RG."
+
+Divergência de endereço (critico):
+"detalhe": "📄 CadÚnico — Município: ANAJATUBA/MA\n📄 RGP — Município: SÃO LUÍS/MA\n⚠ Divergência: municípios diferentes entre os documentos.\n✅ Ação necessária: atualizar o município no RGP ou no CadÚnico para que sejam iguais."
+
+Item conforme (ok):
+"detalhe": "CPF verificado no RG, CadÚnico e Receita Federal — sem divergências."
 
 REGRA ANTI-CONTRADIÇÃO (OBRIGATÓRIA):
 - Valores IGUAIS entre documentos = tipo "ok", NUNCA reportar como divergência
@@ -475,6 +496,9 @@ Com base na MP 1.323/2025 e Resolução CODEFAT 1.027/2025, verificar:
   impeditivos para concessão em 2026 se o REAP 2025 estiver presente.
 - DAE da competência atual — comprovante de contribuição previdenciária (art. 2º, §2º, II)
 - Inscrição na Previdência Social — verificar via CNIS ou DAE (art. 2º, §3º)
+- Contrato → SOMENTE obrigatório se houver evidência de vínculo empregatício nos documentos.
+  Se não há vínculo CLT identificado nos documentos, NÃO reportar ausência de contrato.
+  Pescador artesanal sem vínculo empregatício NÃO precisa apresentar contrato.
 
 [J2] REQUISITOS DO RGP (Portaria MPA 127/2023)
 - Categoria: deve ser PESCADOR ARTESANAL (não industrial, não aquicultor)
@@ -717,10 +741,17 @@ REGRAS DE CONSOLIDAÇÃO
 ━━━━━━━━━━━━━━━━━━━
 1. Se o mesmo problema aparecer nos dois relatórios → gere UMA ÚNICA diretiva (não duplique)
 2. Mantenha a base legal do Relatório B quando disponível
-3. Mantenha os dados exatos do Relatório A quando disponível
+3. Mantenha os dados exatos do Relatório A quando disponível — especialmente os valores
+   encontrados em cada documento (ex: "RG: João Silva / CadÚnico: João da Silva")
 4. Combine os dois quando complementares
-5. A diretiva final deve conter: o problema + a base legal + como resolver
-6. Resumo: objetivo e direto, máximo 2 frases
+5. Para diretivas de DIVERGÊNCIA: use obrigatoriamente o formato detalhado:
+   📄 [Documento] — [Campo]: [Valor encontrado]
+   📄 [Documento] — [Campo]: [Valor encontrado]
+   ⚠ Divergência: [explicação clara do que difere]
+   ✅ Ação necessária: [o que o pescador deve fazer]
+6. Para diretivas de PENDÊNCIA (documento ausente): base legal + documento exigido + como obter
+7. Para diretivas CONFORMES: formato simples confirmando o que foi verificado
+8. Resumo: objetivo e direto, máximo 2 frases
 
 ━━━━━━━━━━━━━━━━━━━
 FORMATO DE SAÍDA: JSON PURO, SEM MARKDOWN
@@ -913,13 +944,30 @@ VERIFICAÇÕES OBRIGATÓRIAS:
 3. Há diretivas classificadas errado? (ex: REAP 2025 ausente classificado como "atencao" em vez de "critico")
 4. O resumo reflete o score e as diretivas?
 5. Há diretivas duplicadas ou redundantes que passaram pelo Consolidador?
+6. Há diretiva de "Contrato ausente" MAS NÃO há evidência de vínculo CLT? → REMOVER a diretiva de contrato.
+   O contrato só é exigido quando há vínculo empregatício identificado.
+7. Há divergência de endereço que menciona "MPA", "SSP", "DETRAN" ou outro órgão emissor?
+   → REMOVER — campos de órgão emissor não são endereços do pescador.
+8. Há diretiva reportando diferença entre data de EMISSÃO e data de INSCRIÇÃO do RGP?
+   → REMOVER — isso é normal e esperado, não é divergência.
+9. Há diretiva de "município de pesca igual ao município de residência" tratada como divergência?
+   → REMOVER — município igual é CONFORME, não divergência.
 
 REGRAS DE CORREÇÃO:
 - Se score > 80 mas há itens críticos impeditivos → reduzir score para no máximo 60
 - Se score < 40 mas só há itens de atenção → aumentar score para no mínimo 50
 - Remover diretivas duplicadas mantendo a mais detalhada
+- Remover diretivas baseadas em falsos positivos (itens 6-9 acima)
 - Corrigir classificação errada de tipo (critico/atencao/ok)
-- Ajustar resumo se não refletir a realidade das diretivas
+- Recalcular score após remover diretivas inválidas (+12 por documento falso ausente removido,
+  +10 por crítico falso removido, +4 por atenção falsa removida)
+- Ajustar resumo se não refletir a realidade das diretivas após correções
+- Para diretivas de divergência que não mostram claramente ONDE está o erro:
+  reescrever o campo "texto" usando o formato:
+  📄 [Documento] — [Campo]: [Valor]
+  📄 [Documento] — [Campo]: [Valor]
+  ⚠ Divergência: [explicação]
+  ✅ Ação necessária: [o que fazer]
 
 SAÍDA OBRIGATÓRIA: JSON PURO, SEM MARKDOWN
 Se não houver nenhuma inconsistência → retorne o resultado original sem alterações.
