@@ -24,21 +24,40 @@ const MODELO_C = "llama-3.3-70b-versatile";  // Consolidador      — síntese f
 const MODELO_D = "llama-3.3-70b-versatile";  // Verificador       — valida consistência
 
 // ── MELHORIA 2: LIMITE DE CHARS POR TIPO DE DOCUMENTO ────────────────────────
-// Documentos com dados ricos (CNIS, REAP, Contrato) recebem limite maior.
-// Documentos simples (RG, DAE) recebem limite menor para economizar tokens.
-// Total estimado com 11 docs: ~12.000 chars → ~3.000 tokens de conteúdo.
-const LIMITE_CHARS = {
-  rg:          400,   // Nome, CPF, RG, data nasc, filiação — dados curtos
-  rgp:         600,   // Número RGP, categoria, situação, município, validade
-  certificado: 400,   // Número, validade, situação
-  residencia:  500,   // Endereço completo, data do documento
-  cadunico:    800,   // Endereço, dados pessoais, composição familiar
-  receita:     500,   // Situação CPF, data consulta
-  cnis:       2000,   // Histórico completo de contribuições — CRÍTICO, precisa de mais espaço
-  reap2124:   1500,   // Declarações de 4 anos — dados extensos
-  reap25:     1500,   // Declaração 2025 — obrigatória para 2026
-  dae:         400,   // Competência, valor, código
-  contrato:    800,   // Datas, partes, tipo de vínculo
+// Dois conjuntos de limites distintos:
+//   LIMITE_CHARS_A → Prompt A (cruzamento de dados) — menor, foca em identificar divergências
+//   LIMITE_CHARS_B → Prompt B (análise jurídica)    — maior, precisa de histórico completo
+//
+// Racional: o Perito Documental não precisa do histórico completo do CNIS para
+// detectar que o município está diferente entre documentos. O Perito Jurídico
+// precisa do CNIS completo para calcular carências de aposentadoria e maternidade.
+
+const LIMITE_CHARS_A = {
+  rg:          300,  // Apenas: nome, CPF, data nasc, filiação
+  rgp:         400,  // Apenas: número, categoria, situação, município
+  certificado: 300,  // Apenas: número, validade, situação
+  residencia:  400,  // Apenas: endereço completo
+  cadunico:    600,  // Endereço + dados pessoais básicos
+  receita:     400,  // Situação CPF
+  cnis:        600,  // Apenas competência mais recente + total de contribuições
+  reap2124:    600,  // Apenas: anos presentes, município, espécie principal
+  reap25:      600,  // Apenas: ano 2025, município, espécie, ambiente
+  dae:         300,  // Apenas: competência e situação
+  contrato:    600,  // Datas + tipo de vínculo (CLT ou não)
+};
+
+const LIMITE_CHARS_B = {
+  rg:          400,  // Nome, CPF, RG, data nasc, filiação
+  rgp:         600,  // Número RGP, categoria, situação, município, validade
+  certificado: 400,  // Número, validade, situação
+  residencia:  500,  // Endereço completo, data do documento
+  cadunico:    800,  // Endereço, dados pessoais, composição familiar
+  receita:     500,  // Situação CPF, data consulta
+  cnis:       2000,  // Histórico COMPLETO de contribuições — carências dependem disso
+  reap2124:   1500,  // Declarações completas de 4 anos
+  reap25:     1500,  // Declaração 2025 completa — obrigatória para 2026
+  dae:         400,  // Competência, valor, código
+  contrato:    800,  // Datas, partes, tipo de vínculo
 };
 
 // ── LABELS DOS DOCUMENTOS ────────────────────────────────────────────────────
@@ -146,13 +165,13 @@ function limparOCR(texto, maxChars = 800) {
     .slice(0, maxChars);
 }
 
-function montarDocsTexto(documentos) {
+function montarDocsTexto(documentos, limites) {
   return Object.entries(LABELS)
     .map(([k, l]) => {
       const raw = documentos[k]?.trim() || "";
       if (!raw) return `[${l}]:\nNÃO INFORMADO`;
-      // Usar limite específico por tipo de documento (Melhoria 2)
-      const limite = LIMITE_CHARS[k] || 800;
+      // Usar limite específico por tipo e por perito (Melhoria 2)
+      const limite = (limites && limites[k]) || 800;
       const texto = sanitizarParaPrompt(limparOCR(raw, limite));
       return `[${l}]:\n${texto}`;
     })
@@ -771,8 +790,9 @@ Retorne o JSON de classificação conforme as instruções.`;
     .map(idx => dados.documentos[idx - 1]?.texto || "")
     .filter(Boolean);
 
-  // Montar texto de docs para os peritos
-  const docsTexto = montarDocsTexto(documentosClassificados);
+  // Montar texto de docs com limites específicos por perito (Melhoria 2)
+  const docsTextoA = montarDocsTexto(documentosClassificados, LIMITE_CHARS_A);
+  const docsTextoB = montarDocsTexto(documentosClassificados, LIMITE_CHARS_B);
 
   const informados = todosIds.filter(k => documentosClassificados[k]?.trim()?.length > 10);
   const ausentes   = todosIds.filter(k => !informados.includes(k));
@@ -788,14 +808,14 @@ DOCS AUSENTES: ${ausentes.map(k => LABELS[k]).join(", ") || "nenhum"}${naoIdenti
   const msgA = `${cabecalho}${extras}
 
 DOCUMENTOS PARA CRUZAMENTO INTERNO:
-${docsTexto}
+${docsTextoA}
 
 Execute todos os blocos C1 a C7. Para cada divergência encontrada, cite os valores exatos dos documentos.`;
 
   const msgB = `${cabecalho}${extras}
 
 DOCUMENTOS PARA ANÁLISE DE CONFORMIDADE LEGAL:
-${docsTexto}
+${docsTextoB}
 
 Execute todos os blocos J1 a J7.
 Para J3: o pescador é do Maranhão — use a portaria de defeso do MA.
