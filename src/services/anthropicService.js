@@ -183,23 +183,32 @@ function montarDocsTexto(documentos, limites) {
 async function chamarGroq({ apiKey, modelo, systemPrompt, userMessage, maxTokens = 2000, label }) {
   if (!apiKey) throw new Error(`[${label}] Chave de API ausente. Verifique o .env.`);
 
+  // gpt-oss-120b usa formato Harmony e rejeita response_format json_object
+  // Para esses modelos, instruir via prompt e extrair JSON defensivamente
+  const suportaJsonMode = !modelo.includes("gpt-oss");
+
+  const bodyObj = {
+    model: modelo,
+    temperature: 0.1,
+    max_tokens: maxTokens,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user",   content: userMessage   },
+    ],
+  };
+
+  // Adicionar response_format apenas para modelos que suportam
+  if (suportaJsonMode) {
+    bodyObj.response_format = { type: "json_object" };
+  }
+
   const response = await fetch(GROQ_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: modelo,
-      temperature: 0.1,
-      max_tokens: maxTokens,
-      // Força retorno em JSON puro — sem markdown, sem texto livre
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userMessage   },
-      ],
-    }),
+    body: JSON.stringify(bodyObj),
   });
 
   if (!response.ok) {
