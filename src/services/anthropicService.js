@@ -3,7 +3,7 @@
 // Pipeline de 5 chamadas em chaves Groq independentes:
 //
 //  CHAMADA 0 — Classificador     → GROQ_API_KEY_4 → llama-3.3-70b-versatile
-//  CHAMADA A — Perito Documental → GROQ_API_KEY_1 → llama-3.1-8b-instant
+//  CHAMADA A — Perito Documental → GROQ_API_KEY_6 → llama-3.1-8b-instant (org nova, TPM independente)
 //  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 → llama-3.3-70b-versatile (recebe contexto de A)
 //  CHAMADA C — Consolidador      → GROQ_API_KEY_3 → llama-3.3-70b-versatile
 //  CHAMADA D — Verificador       → GROQ_API_KEY_5 → llama-3.3-70b-versatile
@@ -931,10 +931,10 @@ Para J4: calcule as carências usando as datas e competências encontradas nos d
   // A e B NÃO são mais paralelos — A roda, seu resultado vai como contexto para B.
   // Isso permite que o Perito Jurídico saiba quais divergências documentais já foram
   // identificadas antes de avaliar a conformidade legal.
-  console.log("[SDGP] Chamada A — Perito Documental (KEY_1)");
+  console.log("[SDGP] Chamada A — Perito Documental (KEY_6 — org independente)");
 
   const resultadoA = await chamarGroq({
-    apiKey:       process.env.GROQ_API_KEY_1,
+    apiKey:       process.env.GROQ_API_KEY_6,
     modelo:       MODELO_A,
     systemPrompt: SYSTEM_A,
     userMessage:  msgA,
