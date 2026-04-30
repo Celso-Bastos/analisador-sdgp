@@ -157,6 +157,34 @@
     .diretiva.atencao .dir-tag { color: var(--amarelo); }
     .diretiva.critico .dir-tag { color: var(--vermelho); }
     .dir-texto { font-size: 13px; line-height: 1.6; }
+
+    /* ── RESULTADO FINAL ── */
+    .resultado-final-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
+    .resultado-badge {
+      font-family: var(--fonte-titulo); font-size: 13px; font-weight: 700;
+      padding: 5px 14px; border-radius: 99px; letter-spacing: 0.05em;
+      text-transform: uppercase; flex-shrink: 0;
+    }
+    .resultado-badge.deferido  { background: var(--verde-claro);   color: var(--verde); }
+    .resultado-badge.pendente  { background: var(--amarelo-claro); color: var(--amarelo); }
+    .resultado-badge.indeferido { background: var(--vermelho-claro); color: var(--vermelho); }
+
+    .motivo-principal {
+      font-size: 13px; color: var(--cinza-700); line-height: 1.5;
+      padding: 10px 14px; background: var(--cinza-100);
+      border-radius: 8px; border-left: 3px solid var(--cinza-400);
+      margin-bottom: 12px;
+    }
+    .motivo-principal.indeferido { border-color: var(--vermelho); background: var(--vermelho-claro); color: var(--vermelho); }
+    .motivo-principal.deferido   { border-color: var(--verde);    background: var(--verde-claro);   color: var(--verde); }
+
+    .alertas-criticos { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .alerta-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 12px; color: var(--vermelho);
+      background: var(--vermelho-claro); border-radius: 7px; padding: 8px 12px;
+    }
+    .alerta-item::before { content: "⛔"; font-size: 13px; flex-shrink: 0; margin-top: 1px; }
   </style>
 </head>
 <body>
@@ -276,6 +304,15 @@
     <div class="secao">
       <div class="card">
         <div class="secao-titulo">Score de regularização</div>
+
+        <!-- Resultado final e motivo principal -->
+        <div class="resultado-final-wrap">
+          <span class="resultado-badge" id="resultado-badge">—</span>
+          <span style="font-size:12px;color:var(--cinza-400)" id="resultado-label"></span>
+        </div>
+        <div class="motivo-principal" id="motivo-principal" style="display:none"></div>
+        <div class="alertas-criticos" id="alertas-criticos" style="display:none"></div>
+
         <div class="score-wrap">
           <div class="score-circulo" id="score-circulo">
             <span class="score-num" id="score-num">—</span>
@@ -622,12 +659,43 @@ async function analisar() {
 // ── RENDERIZAR RESULTADO ──────────────────────────────────────────────────────
 function renderResultado(r, classificacao) {
   const score = Math.max(0, Math.min(100, Math.round(r.score)));
+  const resultadoFinal = r.resultado_final || (score >= 70 ? "DEFERIDO" : score >= 40 ? "PENDENTE" : "INDEFERIDO");
 
+  // ── Resultado final badge ──
+  const badge = document.getElementById("resultado-badge");
+  const labelEl = document.getElementById("resultado-label");
+  const classeBadge = resultadoFinal === "DEFERIDO" ? "deferido" : resultadoFinal === "PENDENTE" ? "pendente" : "indeferido";
+  badge.className = `resultado-badge ${classeBadge}`;
+  badge.textContent = resultadoFinal;
+  const textoLabel = { DEFERIDO: "Documentação em conformidade", PENDENTE: "Pendências a regularizar", INDEFERIDO: "Impedimento identificado" };
+  labelEl.textContent = textoLabel[resultadoFinal] || "";
+
+  // ── Motivo principal ──
+  const motivoEl = document.getElementById("motivo-principal");
+  if (r.motivo_principal) {
+    motivoEl.textContent = "⚡ " + esc(r.motivo_principal);
+    motivoEl.className = `motivo-principal ${classeBadge}`;
+    motivoEl.style.display = "block";
+  } else {
+    motivoEl.style.display = "none";
+  }
+
+  // ── Alertas críticos ──
+  const alertasEl = document.getElementById("alertas-criticos");
+  const alertas = r.alertas_criticos || [];
+  if (alertas.length > 0) {
+    alertasEl.style.display = "flex";
+    alertasEl.innerHTML = alertas.map(a => `<div class="alerta-item">${esc(a)}</div>`).join("");
+  } else {
+    alertasEl.style.display = "none";
+  }
+
+  // ── Score e cor ──
   let cor, titulo;
-  if (score >= 80) {
+  if (resultadoFinal === "DEFERIDO" || score >= 80) {
     cor = { borda: "#1A5C2A", texto: "#1A5C2A", barra: "#2E8B47" };
     titulo = "Alta probabilidade de regularização";
-  } else if (score >= 50) {
+  } else if (resultadoFinal === "PENDENTE" || score >= 50) {
     cor = { borda: "#7A4F00", texto: "#7A4F00", barra: "#C4830A" };
     titulo = "Regularização parcial — pendências importantes";
   } else {
@@ -639,7 +707,7 @@ function renderResultado(r, classificacao) {
   document.getElementById("score-num").style.color = cor.texto;
   document.getElementById("score-num").textContent = score;
   document.getElementById("score-titulo").textContent = titulo;
-  document.getElementById("score-sub").textContent = r.resumo || "";
+  document.getElementById("score-sub").textContent = esc(r.resumo || "");
 
   const barra = document.getElementById("barra");
   barra.style.background = cor.barra;

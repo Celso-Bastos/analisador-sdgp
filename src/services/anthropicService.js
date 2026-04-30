@@ -617,61 +617,106 @@ ETAPA 4 — CRUZAMENTO COM MUNICÍPIO DE PESCA (REAP):
 - Se município de pesca NÃO estiver na portaria identificada → CRÍTICO
 - Petrechos compatíveis com a categoria artesanal e com a portaria identificada?
 
-[J4] CARÊNCIAS PREVIDENCIÁRIAS (calcular com dados do CNIS)
+[J4] DAE — CONTRIBUIÇÕES PREVIDENCIÁRIAS (ADIÇÃO 1: regra exata por portaria)
+REGRA CRÍTICA: A quantidade de DAEs exigida depende da portaria identificada no J3.
+Válido APENAS para exercício da atividade a partir de 01/01/2026.
+
+  PORTARIA 75 (Água Salgada / Marinha):
+  → 7 guias DAE obrigatórias: JUNHO, JULHO, AGOSTO, SETEMBRO, OUTUBRO, NOVEMBRO, DEZEMBRO
+  → Período: junho a dezembro do ano corrente
+  → Cada guia deve estar datada dentro do mês correspondente
+
+  PORTARIA 85 (Água Doce / Continental):
+  → 8 guias DAE obrigatórias: ABRIL, MAIO, JUNHO, JULHO, AGOSTO, SETEMBRO, OUTUBRO, NOVEMBRO
+  → Período: abril a novembro do ano corrente
+  → Cada guia deve estar datada dentro do mês correspondente
+
+Verificar:
+- Quantas guias DAE estão presentes nos documentos?
+- Quais meses estão cobertos?
+- Quais meses estão FALTANDO? (listar explicitamente)
+- As datas estão dentro da janela correta da portaria identificada?
+→ DAE incompleto ou fora do período = CRÍTICO IMPEDITIVO (art. 2º, §2º, II da Lei 10.779)
+
+[J5] CARÊNCIAS PREVIDENCIÁRIAS (calcular com dados do CNIS)
 Usando as contribuições identificadas no CNIS:
 
 a) SEGURO DEFESO (SDGP):
-   → Não há carência de meses de contribuição para o seguro defeso em si
-   → Mas exige inscrição na Previdência Social e contribuição ativa
+   → Exige inscrição ativa na Previdência Social
    → Verificar se há contribuições nos meses de exercício da pesca
-   → Verificar se existe DAE da competência atual (contribuição em dia)
+   → DAE da competência atual em dia? (verificado no J4)
 
 b) APOSENTADORIA POR TEMPO DE CONTRIBUIÇÃO/IDADE:
-   → 180 meses (15 anos) de contribuição — verificar total encontrado no CNIS
+   → 180 meses (15 anos) de contribuição — verificar total no CNIS
 
 c) SALÁRIO MATERNIDADE (pescadora):
-   → 10 meses de contribuição — verificar total encontrado no CNIS
+   → 10 meses de contribuição — verificar total no CNIS
 
 d) AUXÍLIO-DOENÇA:
-   → 12 meses de contribuição — verificar total encontrado no CNIS
-   → Exceção: acidente de qualquer natureza não exige carência
+   → 12 meses de contribuição — verificar no CNIS
+   → Exceção: acidente de qualquer natureza dispensa carência
 
-[J5] IMPEDIMENTOS LEGAIS ABSOLUTOS
-Verificar se existe qualquer dos seguintes:
-- Vínculo CLT ativo durante o período de defeso
-  → IMPEDITIVO ABSOLUTO para recebimento do seguro defeso (art. 3º, §5º da Lei 10.779)
-- Recebimento simultâneo de benefício previdenciário de caráter continuado
-  (aposentadoria, auxílio-doença etc.) durante o defeso
-  → IMPEDITIVO ABSOLUTO
-- Bloqueio/suspensão por fraude anterior
-  → art. 3º: suspensão por 5 anos, dobro em reincidência
-- CadÚnico ausente com prazo de 180 dias expirado
-  → IMPEDITIVO (art. 5º-A, §2º do PL Conversão nº 1/2026)
+[J6] IMPEDIMENTOS LEGAIS ABSOLUTOS (ADIÇÃO 7: vínculo urbano explícito)
+ORDEM DE PRIORIDADE — verificar nesta sequência e interromper ao encontrar o primeiro:
 
-[J6] BIOMETRIA E VALIDAÇÃO (MP 1.323/2025, art. 1º, §10)
+1. REAP 2025 ausente → INDEFERIMENTO IMEDIATO (PL Conversão art. 9º, §único)
+2. CadÚnico ausente ou sem atividade pesqueira → INDEFERIMENTO (art. 2º, §3º)
+3. RGP inativo, suspenso ou com menos de 1 ano → INDEFERIMENTO (art. 2º da Lei 10.779)
+4. Vínculo empregatício urbano ativo (CLT) durante o defeso → INDEFERIMENTO (art. 3º, §5º)
+   → ADIÇÃO 7: verificar no CNIS e Contrato se há qualquer vínculo CLT ativo
+   → Emprego urbano ativo descaracteriza completamente a atividade pesqueira artesanal
+5. Benefício previdenciário de caráter continuado simultâneo → INDEFERIMENTO ABSOLUTO
+6. Suspensão por fraude anterior → 5 anos (dobro em reincidência — art. 3º)
+7. Biometria ausente → INDEFERIMENTO (art. 1º, §10 da MP 1.323/2025)
+8. DAE incompleto ou fora do período → INDEFERIMENTO (J4)
+9. CadÚnico com prazo de 180 dias expirado → IMPEDITIVO (art. 5º-A, §2º PL Conversão)
+
+[J7] BIOMETRIA E VALIDAÇÃO (MP 1.323/2025, art. 1º, §10)
 - A MP exige registro biométrico do requerente
-- Para fins de verificação: TSE, CNH ou CIN podem ser utilizados até
-  implementação plena da Carteira de Identidade Nacional
-- Verificar se o documento de identidade apresentado é compatível com
-  essa exigência (período de transição previsto no art. 7º do PL Conversão)
+- Documentos válidos para verificação: CIN, CNH ou base do TSE
+  (período de transição previsto no art. 7º do PL Conversão nº 1/2026)
+- Verificar se o documento de identidade apresentado é compatível com essa exigência
 
-[J7] REAP — ANÁLISE ESPECÍFICA
+[J8] ENTREVISTA FUNDACENTRO/MTE (ADIÇÃO 6)
+- Verificar se o município de residência (CadÚnico) está em lista de municípios
+  selecionados pelo MTE para entrevista presencial da Fundacentro
+- SE município selecionado: comprovante de agendamento ou realização é OBRIGATÓRIO
+- SE município selecionado E entrevista não comprovada → CRÍTICO IMPEDITIVO
+- SE município NÃO selecionado: não exigir — reportar como "não aplicável"
+- Nota: a lista de municípios selecionados varia por ciclo — verificar nos documentos
+  se há menção a convocação ou notificação do MTE
+
+[J9] REAP — ANÁLISE ESPECÍFICA
 - Para 2026: apenas o REAP 2025 é exigido para concessão (PL Conversão art. 9º, §único)
-- O REAP deve conter: informações sobre venda do pescado, espécies,
-  ambiente, petrechos, município, período
-- Se REAP 2025 AUSENTE: pendência CRÍTICA IMPEDITIVA para concessão em 2026
-- Se REAP 2021–2024 ausente mas REAP 2025 presente: ATENÇÃO (prazo até 31/12/2026)
-- Verificar se o conteúdo do REAP atende ao formato exigido pelo CODEFAT
-  (Resolução CODEFAT 1.027/2025)
+- O REAP deve conter: venda do pescado, espécies, ambiente, petrechos, município, período
+- REAP 2025 AUSENTE → CRÍTICO IMPEDITIVO — INDEFERIMENTO para concessão em 2026
+- REAP 2021–2024 ausente + REAP 2025 presente → ATENÇÃO (prazo até 31/12/2026)
+- Verificar formato exigido pelo CODEFAT (Resolução CODEFAT 1.027/2025)
+
+━━━━━━━━━━━━━━━━━━━
+ORDEM DE PRIORIDADE OBRIGATÓRIA (ADIÇÃO 8)
+━━━━━━━━━━━━━━━━━━━
+Analisar SEMPRE nesta ordem. Se encontrar impedimento absoluto nos blocos iniciais,
+declarar INDEFERIDO imediatamente e registrar o motivo principal antes de continuar.
+
+PRIORIDADE 1 — IMPEDIMENTOS ABSOLUTOS (J9 → J1 → J2 → J6):
+  REAP 2025 → CadÚnico → RGP → Biometria → Vínculo urbano → DAEs
+
+PRIORIDADE 2 — CONFORMIDADE OPERACIONAL (J3 → J4 → J5 → J7 → J8):
+  Portaria → DAE completo → Carências → Entrevista MTE
+
+PRIORIDADE 3 — VALIDAÇÕES COMPLEMENTARES:
+  Dados pessoais, endereço, consistências menores
 
 ━━━━━━━━━━━━━━━━━━━
 REGRAS ABSOLUTAS
 ━━━━━━━━━━━━━━━━━━━
 1. Cite SEMPRE o artigo/portaria/resolução que fundamenta cada apontamento.
-2. NUNCA invente dados. Se não há informação suficiente para avaliar, declare isso.
-3. NÃO compare documentos entre si. Apenas avalie se o que está nos docs atende à lei.
-4. Seja específico: não diga "pode ser irregular", diga "é irregular nos termos do art. X".
-5. Diferencie IMPEDITIVO (bloqueia o benefício) de PENDÊNCIA (pode ser regularizada).
+2. NUNCA invente dados. Se não há informação suficiente, declare explicitamente.
+3. NÃO compare documentos entre si. Apenas avalie conformidade com a lei.
+4. Seja específico: não diga "pode ser irregular" — diga "é irregular nos termos do art. X".
+5. Diferencie IMPEDITIVO (bloqueia benefício) de PENDÊNCIA (pode ser regularizada).
+6. Para DAEs: sempre informar QUANTOS estão presentes e QUAIS meses estão faltando.
 
 ━━━━━━━━━━━━━━━━━━━
 FORMATO DE SAÍDA: JSON PURO, SEM MARKDOWN
@@ -754,9 +799,38 @@ REGRAS DE CONSOLIDAÇÃO
 8. Resumo: objetivo e direto, máximo 2 frases
 
 ━━━━━━━━━━━━━━━━━━━
+ADIÇÕES 2, 3, 4, 5 — RESULTADO ESTRUTURADO COM FAIL-FAST
+━━━━━━━━━━━━━━━━━━━
+
+LÓGICA FAIL-FAST (Adição 5):
+Se houver QUALQUER impedimento absoluto identificado nos relatórios A ou B:
+→ resultado_final = "INDEFERIDO"
+→ motivo_principal = primeiro e mais grave impedimento encontrado
+→ alertas_criticos = lista de TODOS os impeditivos absolutos
+→ O score reflete a gravidade (score ≤ 30 se há impeditivo absoluto)
+
+Impedimentos absolutos que causam INDEFERIDO imediato:
+- REAP 2025 ausente
+- CadÚnico ausente ou sem atividade pesqueira declarada
+- RGP inativo, suspenso ou com menos de 1 ano
+- Vínculo CLT urbano ativo durante o defeso
+- Biometria ausente
+- DAE incompleto ou fora do período correto da portaria
+- Benefício previdenciário simultâneo
+- Entrevista Fundacentro obrigatória não realizada
+
+Se NÃO houver impedimentos absolutos:
+→ resultado_final = "DEFERIDO" (se score ≥ 70 e sem críticos)
+→ resultado_final = "PENDENTE" (se score 40–69 ou há atenções relevantes)
+→ resultado_final = "INDEFERIDO" (se score < 40 ou há críticos impeditivos)
+
+━━━━━━━━━━━━━━━━━━━
 FORMATO DE SAÍDA: JSON PURO, SEM MARKDOWN
 ━━━━━━━━━━━━━━━━━━━
 {
+  "resultado_final": "DEFERIDO|PENDENTE|INDEFERIDO",
+  "motivo_principal": "<primeiro e mais grave problema — uma frase objetiva, ou 'Sem impedimentos críticos' se DEFERIDO>",
+  "alertas_criticos": ["<impedimento absoluto 1>", "<impedimento absoluto 2>"],
   "score": <número entre 0 e 100>,
   "resumo": "<situação geral em 1–2 frases objetivas>",
   "diretivas": [
@@ -769,6 +843,7 @@ FORMATO DE SAÍDA: JSON PURO, SEM MARKDOWN
 }
 
 Gere entre 8 e 14 diretivas. Ordem obrigatória: críticos → atenções → conformes.
+Se resultado_final = "INDEFERIDO": os alertas_criticos devem aparecer como primeiras diretivas.
 `;
 
 // ── FUNÇÃO PRINCIPAL ──────────────────────────────────────────────────────────
@@ -976,6 +1051,9 @@ Se houver inconsistências → retorne o resultado corrigido.
 {
   "raciocinio_verificacao": "verifiquei o score X contra Y diretivas críticas...",
   "inconsistencias_encontradas": ["lista do que foi corrigido, ou vazio se nada foi corrigido"],
+  "resultado_final": "DEFERIDO|PENDENTE|INDEFERIDO",
+  "motivo_principal": "<primeiro problema mais grave ou sem impedimentos>",
+  "alertas_criticos": ["<impeditivos absolutos confirmados>"],
   "score": <número corrigido ou original>,
   "resumo": "<resumo corrigido ou original>",
   "diretivas": [<diretivas corrigidas ou originais>]
@@ -1018,6 +1096,24 @@ inconsistências internas. Retorne sempre JSON puro.`,
   consolidado.score = Math.max(0, Math.min(100, Math.round(Number(consolidado.score) || 0)));
   if (!Array.isArray(consolidado.diretivas)) consolidado.diretivas = [];
   if (!consolidado.resumo) consolidado.resumo = "Análise concluída. Verifique as diretivas abaixo.";
+
+  // Garantir campos novos com fallback seguro
+  const resultadosValidos = ["DEFERIDO", "PENDENTE", "INDEFERIDO"];
+  if (!resultadosValidos.includes(consolidado.resultado_final)) {
+    // Derivar resultado_final do score se o modelo não retornou
+    if (consolidado.score >= 70) consolidado.resultado_final = "DEFERIDO";
+    else if (consolidado.score >= 40) consolidado.resultado_final = "PENDENTE";
+    else consolidado.resultado_final = "INDEFERIDO";
+  }
+  if (!consolidado.motivo_principal) {
+    const primeiroCritico = consolidado.diretivas.find(d => d.tipo === "critico");
+    consolidado.motivo_principal = primeiroCritico?.titulo || "Sem impedimentos críticos identificados.";
+  }
+  if (!Array.isArray(consolidado.alertas_criticos)) {
+    consolidado.alertas_criticos = consolidado.diretivas
+      .filter(d => d.tipo === "critico")
+      .map(d => d.titulo);
+  }
 
   // ── Métricas de tokens das 4 chamadas (A, B, C, D) ──────────────────────
   const usageA = resultadoA.__usage || {};
