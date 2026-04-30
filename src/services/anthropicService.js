@@ -225,21 +225,40 @@ async function chamarGroq({ apiKey, modelo, systemPrompt, userMessage, maxTokens
   const tokensSaida   = usage.completion_tokens || 0;
   const tokensTotal   = usage.total_tokens      || (tokensEntrada + tokensSaida);
 
-  // Limpar fences de markdown residuais
   let raw = (data.choices?.[0]?.message?.content || "").trim();
-  raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
 
-  // Se vier texto antes do JSON, extrair só o objeto
+  // Log para debug em caso de falha (truncado para não expor dados)
+  const rawPreview = raw.slice(0, 150);
+
+  // Passo 1 — Remover blocos <think>...</think> (gpt-oss raciocínio interno)
+  raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // Passo 2 — Remover fences de markdown ```json ... ```
+  raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/gi, "").trim();
+
+  // Passo 3 — Extrair só o bloco JSON (do primeiro { ao último })
   const jsonStart = raw.indexOf("{");
-  if (jsonStart > 0) raw = raw.slice(jsonStart);
+  const jsonEnd   = raw.lastIndexOf("}");
+  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+    raw = raw.slice(jsonStart, jsonEnd + 1);
+  }
 
+  // Passo 4 — Tentar parse
   try {
     const parsed = JSON.parse(raw);
-    // Anexar usage ao resultado para consolidação de métricas
     parsed.__usage = { label, modelo, tokensEntrada, tokensSaida, tokensTotal };
     return parsed;
   } catch {
-    throw new Error(`[${label}] JSON inválido na resposta: ${raw.slice(0, 300)}`);
+    // Passo 5 — Última tentativa: remover caracteres de controle que quebram o JSON
+    try {
+      const sanitized = raw.replace(/[\x00-\x1F\x7F]/g, " ");
+      const parsed = JSON.parse(sanitized);
+      parsed.__usage = { label, modelo, tokensEntrada, tokensSaida, tokensTotal };
+      return parsed;
+    } catch {
+      console.error(`[${label}] Resposta raw (150 chars): ${rawPreview}`);
+      throw new Error(`[${label}] JSON inválido na resposta: ${raw.slice(0, 200)}`);
+    }
   }
 }
 
