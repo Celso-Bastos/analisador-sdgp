@@ -3,7 +3,7 @@
 // Pipeline de 5 chamadas em chaves Groq independentes:
 //
 //  CHAMADA 0 — Classificador     → GROQ_API_KEY_4 → llama-3.3-70b-versatile
-//  CHAMADA A — Perito Documental → GROQ_API_KEY_6 → llama-3.1-8b-instant (org nova, TPM independente)
+//  CHAMADA A — Perito Documental → GROQ_API_KEY_6 → openai/gpt-oss-120b (300K TPM, free tier)
 //  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 → llama-3.3-70b-versatile (recebe contexto de A)
 //  CHAMADA C — Consolidador      → GROQ_API_KEY_3 → llama-3.3-70b-versatile
 //  CHAMADA D — Verificador       → GROQ_API_KEY_5 → llama-3.3-70b-versatile
@@ -18,7 +18,7 @@
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODELO_0 = "llama-3.3-70b-versatile";  // Classificador     — identifica documentos
-const MODELO_A = "llama-3.1-8b-instant";     // Perito Documental — cruzamento de dados
+const MODELO_A = "openai/gpt-oss-120b";      // Perito Documental — 300K TPM, free tier, +35-45% precisão
 const MODELO_B = "llama-3.3-70b-versatile";  // Perito Jurídico   — raciocínio legal
 const MODELO_C = "llama-3.3-70b-versatile";  // Consolidador      — síntese final
 const MODELO_D = "llama-3.3-70b-versatile";  // Verificador       — valida consistência
@@ -1135,6 +1135,7 @@ inconsistências internas. Retorne sempre JSON puro.`,
   // Fonte: preços públicos — atualizar conforme necessário
   const PRECOS = {
     "llama-3.1-8b-instant":    { input: 0.05,  output: 0.08  }, // Groq on-demand
+    "openai/gpt-oss-120b":     { input: 0.15,  output: 0.60  }, // Groq on-demand (free tier disponível)
     "llama-3.3-70b-versatile": { input: 0.59,  output: 0.79  }, // Groq on-demand
     "claude-sonnet-4-5":       { input: 3.00,  output: 15.00 }, // Anthropic
     "claude-opus-4":           { input: 15.00, output: 75.00 }, // Anthropic
