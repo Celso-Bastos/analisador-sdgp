@@ -3,7 +3,7 @@
 // Pipeline de 5 chamadas em chaves Groq independentes:
 //
 //  CHAMADA 0 — Classificador     → GROQ_API_KEY_4 → llama-3.3-70b-versatile
-//  CHAMADA A — Perito Documental → GROQ_API_KEY_6 → openai/gpt-oss-120b (300K TPM, free tier)
+//  CHAMADA A — Perito Documental → GROQ_API_KEY_6 → llama-3.3-70b-versatile (org independente)
 //  CHAMADA B — Perito Jurídico   → GROQ_API_KEY_2 → llama-3.3-70b-versatile (recebe contexto de A)
 //  CHAMADA C — Consolidador      → GROQ_API_KEY_3 → llama-3.3-70b-versatile
 //  CHAMADA D — Verificador       → GROQ_API_KEY_5 → llama-3.3-70b-versatile
@@ -18,7 +18,7 @@
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODELO_0 = "llama-3.3-70b-versatile";  // Classificador     — identifica documentos
-const MODELO_A = "openai/gpt-oss-120b";      // Perito Documental — 300K TPM, free tier, +35-45% precisão
+const MODELO_A = "llama-3.3-70b-versatile";  // Perito Documental — org independente KEY_6
 const MODELO_B = "llama-3.3-70b-versatile";  // Perito Jurídico   — raciocínio legal
 const MODELO_C = "llama-3.3-70b-versatile";  // Consolidador      — síntese final
 const MODELO_D = "llama-3.3-70b-versatile";  // Verificador       — valida consistência
@@ -33,18 +33,20 @@ const MODELO_D = "llama-3.3-70b-versatile";  // Verificador       — valida con
 // precisa do CNIS completo para calcular carências de aposentadoria e maternidade.
 
 const LIMITE_CHARS_A = {
-  rg:          300,  // Apenas: nome, CPF, data nasc, filiação
-  rgp:         400,  // Apenas: número, categoria, situação, município
-  certificado: 300,  // Apenas: número, validade, situação
-  residencia:  400,  // Apenas: endereço completo
-  cadunico:    600,  // Endereço + dados pessoais básicos
-  receita:     400,  // Situação CPF
-  cnis:        600,  // Apenas competência mais recente + total de contribuições
-  reap2124:    600,  // Apenas: anos presentes, município, espécie principal
-  reap25:      600,  // Apenas: ano 2025, município, espécie, ambiente
-  dae:         300,  // Apenas: competência e situação
-  contrato:    600,  // Datas + tipo de vínculo (CLT ou não)
+  rg:          300,  // Nome, CPF, data nasc, filiação
+  rgp:         400,  // Número, categoria, situação, município
+  certificado: 250,  // Número, validade, situação
+  residencia:  350,  // Endereço completo
+  cadunico:    500,  // Endereço + dados pessoais básicos
+  receita:     300,  // Situação CPF
+  cnis:        500,  // Competência mais recente + total contribuições
+  reap2124:    500,  // Anos presentes, município, espécie principal
+  reap25:      500,  // Ano 2025, município, espécie, ambiente
+  dae:         250,  // Competência e situação
+  contrato:    500,  // Datas + tipo de vínculo (CLT ou não)
 };
+// Total estimado com 11 docs: ~4.350 chars → ~1.090 tokens de conteúdo
+// + prompt system (~3.500 tokens) = ~4.590 tokens total — dentro de 6.000 TPM com margem
 
 const LIMITE_CHARS_B = {
   rg:          400,  // Nome, CPF, RG, data nasc, filiação
@@ -989,13 +991,12 @@ Para J4: calcule as carências usando as datas e competências encontradas nos d
   // identificadas antes de avaliar a conformidade legal.
   console.log("[SDGP] Chamada A — Perito Documental (KEY_6 — org independente)");
 
-  // gpt-oss-120b pode retornar vazio ocasionalmente — usar retry automático
-  const resultadoA = await chamarGroqComRetry({
+  const resultadoA = await chamarGroq({
     apiKey:       process.env.GROQ_API_KEY_6,
     modelo:       MODELO_A,
     systemPrompt: SYSTEM_A,
     userMessage:  msgA,
-    maxTokens:    2500,  // aumentado para dar mais espaço ao raciocínio do gpt-oss
+    maxTokens:    2000,
     label:        "PERITO-DOCUMENTAL",
   });
 
